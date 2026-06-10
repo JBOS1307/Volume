@@ -289,16 +289,26 @@ let selMachine = DEFAULT_MACHINES[0];
 let confirmDeleteId = null, confirmDiscard = false, expandedId = null, analysisMachine = null;
 let timerInt = null;
 
+// --- Speicher-Wrapper: localStorage, mit In-Memory-Fallback für Testumgebungen ---
+let _mem = {}, TEST_MODE = false;
+try { localStorage.setItem("vt-test","1"); localStorage.removeItem("vt-test"); }
+catch(e){ TEST_MODE = true; }
+const store = {
+  get(k){ if(TEST_MODE) return _mem[k] ?? null; try { return localStorage.getItem(k); } catch(e){ return _mem[k] ?? null; } },
+  set(k,v){ if(TEST_MODE){ _mem[k]=v; return; } try { localStorage.setItem(k,v); } catch(e){ _mem[k]=v; } },
+  remove(k){ if(TEST_MODE){ delete _mem[k]; return; } try { localStorage.removeItem(k); } catch(e){ delete _mem[k]; } }
+};
+
 function load() {
-  try { const d = JSON.parse(localStorage.getItem(LS_DATA)); if (d && d.sessions) state = d; } catch(e) {}
-  try { const a = JSON.parse(localStorage.getItem(LS_ACTIVE)); if (a && a.start) active = a; } catch(e) {}
+  try { const d = JSON.parse(store.get(LS_DATA)); if (d && d.sessions) state = d; } catch(e) {}
+  try { const a = JSON.parse(store.get(LS_ACTIVE)); if (a && a.start) active = a; } catch(e) {}
   if (!state.machines || !state.machines.length) state.machines = DEFAULT_MACHINES.slice();
   selMachine = state.machines[0];
 }
-function save() { localStorage.setItem(LS_DATA, JSON.stringify(state)); }
+function save() { store.set(LS_DATA, JSON.stringify(state)); }
 function saveActive() {
-  if (active) localStorage.setItem(LS_ACTIVE, JSON.stringify(active));
-  else localStorage.removeItem(LS_ACTIVE);
+  if (active) store.set(LS_ACTIVE, JSON.stringify(active));
+  else store.remove(LS_ACTIVE);
 }
 
 // ================= Helpers =================
@@ -702,6 +712,13 @@ function renderDataTab(){
 // ================= Start =================
 load();
 renderTraining();
+if (TEST_MODE) {
+  const sub = document.getElementById("headSub");
+  const hint = document.createElement("div");
+  hint.style.cssText = "color:#FF6B2C;font-size:12px;font-weight:700;margin-top:4px";
+  hint.textContent = "⚠ Testmodus – Daten werden nicht dauerhaft gespeichert";
+  sub.after(hint);
+}
 </script>
 </body>
 </html>
