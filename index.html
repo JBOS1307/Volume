@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Volumentracker</title>
+<!-- iOS: Vollbild-Modus, wenn zum Home-Bildschirm hinzugefügt -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Volumen">
+<meta name="theme-color" content="#15171C">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<script>
+  // Service Worker registrieren → App läuft nach dem ersten Öffnen komplett offline
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+</script>
+<style>
+  :root {
+    --bg: #15171C; --panel: #1F222A; --panel-soft: #262A33; --line: #343945;
+    --text: #F2F0EB; --dim: #9BA1AD; --accent: #FF6B2C; --good: #5BD08C; --bad: #FF6B6B;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; }
+  html, body { background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    max-width: 480px; margin: 0 auto;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    min-height: 100vh;
+  }
+  .num { font-family: 'Oswald', 'Avenir Next Condensed', -apple-system, sans-serif; font-weight: 600; }
+  header { padding: calc(18px + env(safe-area-inset-top)) 18px 8px; }
+  header h1 { font-size: 24px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; }
+  header h1 span { color: var(--accent); }
+  header .sub { color: var(--dim); font-size: 13px; margin-top: 2px; }
+  main { padding: 8px 16px; }
+  .hidden { display: none !important; }
+
+  .bigbtn {
+    width: 100%; padding: 17px 0; border-radius: 16px; border: none;
+    font-size: 17px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+    cursor: pointer; font-family: inherit; color: var(--text); background: var(--panel-soft);
+  }
+  .bigbtn.primary { background: var(--accent); color: #1A1A1A; }
+  .bigbtn.outline { border: 1px solid var(--accent); }
+  .bigbtn.dark { background: #2E3340; }
+  .bigbtn.danger { background: #4A2A2A; }
+
+  .cards { display: flex; gap: 10px; flex-wrap: wrap; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 13px 15px; flex: 1; min-width: 130px;
+  }
+  .card .lbl { font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--dim); }
+  .card .val { font-size: 25px; margin-top: 4px; line-height: 1.1; }
+  .card .val.accent { color: var(--accent); }
+  .card .sub2 { font-size: 12px; color: var(--dim); margin-top: 4px; }
+
+  .seclbl {
+    font-size: 12px; color: var(--dim); text-transform: uppercase;
+    letter-spacing: 1px; margin: 20px 0 8px;
+  }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    padding: 10px 14px; border-radius: 999px; font-size: 14px; font-weight: 600;
+    background: var(--panel-soft); border: 1px solid var(--line); cursor: pointer;
+    white-space: nowrap;
+  }
+  .chip.sel { background: var(--accent); color: #1A1A1A; border-color: var(--accent); }
+  .chip small { font-weight: 700; margin-left: 6px; }
+  .chip small.up { color: var(--good); } .chip small.down { color: var(--bad); }
+  .chip.sel small { color: #1A1A1A; }
+
+  .stepper { display: flex; align-items: center; gap: 8px; }
+  .stepper button {
+    width: 46px; height: 46px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--panel-soft); color: var(--text); font-size: 24px; font-weight: 700;
+    cursor: pointer;
+  }
+  .stepper input {
+    width: 72px; height: 46px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); text-align: center; font-size: 19px;
+    font-weight: 600; outline: none; font-family: inherit;
+  }
+
+  .live {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    padding: 20px 18px; text-align: center;
+  }
+  .live .total { font-size: 54px; color: var(--accent); line-height: 1.05; margin: 6px 0 2px; }
+  .live .total small { font-size: 22px; color: var(--dim); }
+  .live .meta { display: flex; justify-content: center; gap: 16px; margin-top: 8px; align-items: center; font-size: 15px; }
+  .progressbar { height: 8px; border-radius: 999px; background: var(--panel-soft); overflow: hidden; margin-top: 12px; }
+  .progressbar > div { height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s; }
+  .pbarlbl { font-size: 11px; color: var(--dim); margin-top: 4px; }
+
+  .badge {
+    font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+  }
+  .badge.up { background: #5BD08C22; color: var(--good); }
+  .badge.down { background: #FF6B6B22; color: var(--bad); }
+
+  .setrow {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px 14px; margin-bottom: 8px;
+  }
+  .setrow .m { font-weight: 600; font-size: 15px; }
+  .setrow .d { color: var(--dim); font-size: 13px; }
+  .setrow .d b { color: var(--accent); font-weight: 600; }
+  .setrow .x { color: var(--dim); font-size: 20px; padding: 4px 8px; cursor: pointer; }
+
+  .sess {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    margin-bottom: 10px; overflow: hidden;
+  }
+  .sess .head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; cursor: pointer; }
+  .sess .vol { font-size: 22px; color: var(--accent); }
+  .sess .detail { padding: 0 16px 14px; border-top: 1px solid var(--line); }
+  .sess .mgroup { margin-top: 12px; font-size: 14px; font-weight: 600; }
+  .sess .mgroup span { color: var(--dim); font-weight: 400; }
+  .sess .srow { color: var(--dim); font-size: 13px; margin-left: 8px; }
+  .dellink { margin-top: 14px; color: var(--bad); font-size: 13px; cursor: pointer; display: inline-block; }
+
+  .chartbox {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 8px 6px;
+  }
+  .chartbox svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; gap: 14px; padding: 0 8px 6px; font-size: 12px; color: var(--dim); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; }
+
+  input.txt {
+    width: 100%; padding: 13px 14px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font-size: 16px; outline: none; font-family: inherit;
+  }
+  .row { display: flex; gap: 8px; }
+  .okbtn { padding: 0 18px; border-radius: 12px; border: none; background: var(--accent); color: #1A1A1A; font-weight: 700; cursor: pointer; }
+
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0; max-width: 480px; margin: 0 auto;
+    display: flex; background: var(--bg); border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav div {
+    flex: 1; text-align: center; padding: 13px 0; cursor: pointer; font-size: 12px;
+    font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--dim);
+    border-top: 3px solid transparent;
+  }
+  nav div.sel { color: var(--accent); border-top-color: var(--accent); background: var(--panel-soft); }
+
+  .empty {
+    margin-top: 24px; padding: 20px; border-radius: 14px; border: 1px dashed var(--line);
+    color: var(--dim); font-size: 14px; line-height: 1.5;
+  }
+  .center { text-align: center; color: var(--dim); padding: 20px; }
+  .iobtn {
+    flex: 1; padding: 14px 0; border-radius: 14px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font-size: 14px; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+  }
+  .note { font-size: 12px; color: var(--dim); line-height: 1.5; margin-top: 8px; }
+  .toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(90px + env(safe-area-inset-bottom));
+    background: var(--panel-soft); border: 1px solid var(--accent); color: var(--text);
+    padding: 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 600;
+    opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 99;
+    max-width: 90%; text-align: center;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Volumen<span>tracker</span></h1>
+  <div class="sub" id="headSub"></div>
+</header>
+
+<main>
+  <!-- ============ TRAINING ============ -->
+  <section id="tab-training">
+    <div id="idleView">
+      <button class="bigbtn primary" onclick="startTraining()">▶ Training starten</button>
+      <div id="lastBox"></div>
+      <div id="emptyHint" class="empty hidden">
+        Noch keine Trainings gespeichert. Starte dein erstes Training, trag deine Sätze ein –
+        und beim Beenden landet alles im Verlauf.
+      </div>
+    </div>
+
+    <div id="activeView" class="hidden">
+      <div class="live">
+        <div class="lbl" style="font-size:12px;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase">Gesamtgewicht heute</div>
+        <div class="total num" id="liveTotal">0 <small>kg</small></div>
+        <div class="meta">
+          <span class="num" id="liveTimer">⏱ 0:00</span>
+          <span style="color:var(--dim);font-size:14px" id="liveSets">0 Sätze</span>
+          <span id="liveTrend"></span>
+        </div>
+        <div id="livePbar"></div>
+      </div>
+
+      <div class="seclbl">Gerät</div>
+      <div class="chips" id="machineChips"></div>
+      <div class="row hidden" id="addMachineRow" style="margin-top:8px">
+        <input class="txt" id="newMachineInput" placeholder="Gerätename">
+        <button class="okbtn" onclick="addMachine()">OK</button>
+      </div>
+
+      <div style="display:flex;gap:18px;margin-top:16px;flex-wrap:wrap">
+        <div>
+          <div class="seclbl" style="margin:0 0 6px">Gewicht (kg)</div>
+          <div class="stepper">
+            <button onclick="bump('kg',-2.5)">−</button>
+            <input type="number" inputmode="decimal" id="kgInput" value="40">
+            <button onclick="bump('kg',2.5)">+</button>
+          </div>
+        </div>
+        <div>
+          <div class="seclbl" style="margin:0 0 6px">Wiederholungen</div>
+          <div class="stepper">
+            <button onclick="bump('reps',-1)">−</button>
+            <input type="number" inputmode="numeric" id="repsInput" value="12">
+            <button onclick="bump('reps',1)">+</button>
+          </div>
+        </div>
+      </div>
+
+      <button class="bigbtn outline" style="margin-top:16px" onclick="addSet()" id="addSetBtn">＋ Satz eintragen</button>
+      <div id="setList" style="margin-top:16px"></div>
+      <button class="bigbtn dark" style="margin-top:12px" onclick="finishTraining()" id="finishBtn">■ Training beenden &amp; speichern</button>
+      <div id="discardCancel" class="center hidden" style="cursor:pointer;font-size:13px" onclick="cancelDiscard()">Abbrechen, Training läuft weiter</div>
+    </div>
+  </section>
+
+  <!-- ============ VERLAUF ============ -->
+  <section id="tab-verlauf" class="hidden">
+    <div id="historyList"></div>
+  </section>
+
+  <!-- ============ FORTSCHRITT ============ -->
+  <section id="tab-fortschritt" class="hidden">
+    <div id="statsArea"></div>
+  </section>
+
+  <!-- ============ DATEN ============ -->
+  <section id="tab-daten" class="hidden">
+    <div class="seclbl" style="margin-top:4px">Backup &amp; Wiederherstellung</div>
+    <div class="row">
+      <button class="iobtn" onclick="exportData()">⬆ Exportieren</button>
+      <button class="iobtn" onclick="document.getElementById('importFile').click()">⬇ Importieren</button>
+    </div>
+    <input type="file" id="importFile" accept=".json,application/json" class="hidden" onchange="importData(event)">
+    <div class="note">
+      <b>Export:</b> Es öffnet sich das Teilen-Menü. Wähle <b>„In Dateien sichern"</b> →
+      <b>iCloud Drive</b> → deinen Ordner (z.&nbsp;B. „Volumentracker") → Sichern.<br><br>
+      <b>Import:</b> Es öffnet sich die Dateien-App. Navigiere zu deinem iCloud-Ordner
+      und wähle die Backup-Datei aus. Die aktuellen Daten werden dabei ersetzt.
+    </div>
+    <div class="seclbl">Aktueller Stand</div>
+    <div class="cards" id="dataStats"></div>
+  </section>
+</main>
+
+<nav>
+  <div id="nav-training" class="sel" onclick="showTab('training')">Training</div>
+  <div id="nav-verlauf" onclick="showTab('verlauf')">Verlauf</div>
+  <div id="nav-fortschritt" onclick="showTab('fortschritt')">Fortschritt</div>
+  <div id="nav-daten" onclick="showTab('daten')">Daten</div>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+// ================= Daten =================
+const DEFAULT_MACHINES = ["Beinpresse","Latzug","Rudern","Brustpresse","Schulterdrücken","Bauchmaschine","Beinbeuger"];
+const LS_DATA = "vt-data", LS_ACTIVE = "vt-active";
+
+let state = { machines: DEFAULT_MACHINES.slice(), sessions: [] };
+let active = null;            // { start, sets: [{machine,kg,reps,ts}] }
+let selMachine = DEFAULT_MACHINES[0];
+let confirmDeleteId = null, confirmDiscard = false, expandedId = null, analysisMachine = null;
+let timerInt = null;
+
+function load() {
+  try { const d = JSON.parse(localStorage.getItem(LS_DATA)); if (d && d.sessions) state = d; } catch(e) {}
+  try { const a = JSON.parse(localStorage.getItem(LS_ACTIVE)); if (a && a.start) active = a; } catch(e) {}
+  if (!state.machines || !state.machines.length) state.machines = DEFAULT_MACHINES.slice();
+  selMachine = state.machines[0];
+}
+function save() { localStorage.setItem(LS_DATA, JSON.stringify(state)); }
+function saveActive() {
+  if (active) localStorage.setItem(LS_ACTIVE, JSON.stringify(active));
+  else localStorage.removeItem(LS_ACTIVE);
+}
+
+// ================= Helpers =================
+const fmtKg = n => new Intl.NumberFormat("de-DE",{maximumFractionDigits:1}).format(n);
+const fmtDate = iso => new Date(iso).toLocaleDateString("de-DE",{weekday:"short",day:"2-digit",month:"2-digit",year:"2-digit"});
+const fmtShort = iso => new Date(iso).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
+function fmtDur(sec){
+  const h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), s=Math.floor(sec%60);
+  return h>0 ? h+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0") : m+":"+String(s).padStart(2,"0");
+}
+const sVol = s => s.sets.reduce((a,x)=>a+x.kg*x.reps,0);
+const esc = t => String(t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(msg){
+  const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"), 2600);
+}
+function lastValues(){
+  const map={};
+  for(const sess of state.sessions) for(const x of sess.sets) map[x.machine]={kg:x.kg,reps:x.reps};
+  if(active) for(const x of active.sets) map[x.machine]={kg:x.kg,reps:x.reps};
+  return map;
+}
+
+// ================= Tabs =================
+function showTab(t){
+  for(const id of ["training","verlauf","fortschritt","daten"]){
+    document.getElementById("tab-"+id).classList.toggle("hidden", id!==t);
+    document.getElementById("nav-"+id).classList.toggle("sel", id===t);
+  }
+  if(t==="verlauf") renderHistory();
+  if(t==="fortschritt") renderStats();
+  if(t==="daten") renderDataTab();
+}
+
+// ================= Training =================
+function startTraining(){
+  active = { start: Date.now(), sets: [] };
+  saveActive(); renderTraining();
+}
+function bump(which, d){
+  const el = document.getElementById(which==="kg"?"kgInput":"repsInput");
+  const min = which==="kg"?0:1;
+  el.value = Math.max(min, +( (Number(el.value)||0) + d ).toFixed(2));
+  updateAddBtn();
+}
+function updateAddBtn(){
+  const kg=Number(document.getElementById("kgInput").value)||0;
+  const reps=Number(document.getElementById("repsInput").value)||0;
+  document.getElementById("addSetBtn").textContent = "＋ Satz eintragen ("+fmtKg(kg*reps)+" kg)";
+}
+function pickMachine(m){
+  selMachine = m;
+  const lv = lastValues()[m];
+  if(lv){ document.getElementById("kgInput").value=lv.kg; document.getElementById("repsInput").value=lv.reps; }
+  renderChips(); updateAddBtn();
+}
+function toggleAddMachine(){ document.getElementById("addMachineRow").classList.toggle("hidden"); }
+function addMachine(){
+  const inp=document.getElementById("newMachineInput");
+  const name=inp.value.trim();
+  if(!name) return;
+  if(!state.machines.includes(name)){ state.machines.push(name); save(); }
+  inp.value=""; document.getElementById("addMachineRow").classList.add("hidden");
+  pickMachine(name);
+}
+function addSet(){
+  if(!active) return;
+  const kg=Number(document.getElementById("kgInput").value)||0;
+  const reps=Number(document.getElementById("repsInput").value)||0;
+  if(kg<=0||reps<=0||!selMachine) return;
+  active.sets.push({machine:selMachine,kg,reps,ts:Date.now()});
+  saveActive(); renderLive(); renderSets();
+}
+function removeSet(i){
+  active.sets.splice(i,1);
+  saveActive(); renderLive(); renderSets();
+}
+function finishTraining(){
+  if(!active) return;
+  if(active.sets.length===0){
+    if(!confirmDiscard){
+      confirmDiscard=true;
+      const b=document.getElementById("finishBtn");
+      b.textContent="Keine Sätze – nochmal tippen zum Verwerfen";
+      b.classList.remove("dark"); b.classList.add("danger");
+      document.getElementById("discardCancel").classList.remove("hidden");
+      return;
+    }
+    active=null; confirmDiscard=false; saveActive(); renderTraining(); return;
+  }
+  const end=Date.now();
+  state.sessions.push({
+    id:"s_"+end,
+    date:new Date(active.start).toISOString(),
+    durationSec:Math.round((end-active.start)/1000),
+    sets:active.sets
+  });
+  state.sessions.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  save();
+  expandedId = "s_"+end;
+  active=null; saveActive();
+  renderTraining(); renderHeader();
+  showTab("verlauf");
+  toast("Training gespeichert 💪");
+}
+function cancelDiscard(){
+  confirmDiscard=false;
+  const b=document.getElementById("finishBtn");
+  b.textContent="■ Training beenden & speichern";
+  b.classList.add("dark"); b.classList.remove("danger");
+  document.getElementById("discardCancel").classList.add("hidden");
+}
+
+// ================= Rendering: Training =================
+function renderTraining(){
+  document.getElementById("idleView").classList.toggle("hidden", !!active);
+  document.getElementById("activeView").classList.toggle("hidden", !active);
+  cancelDiscard();
+  if(active){
+    renderChips(); renderLive(); renderSets(); updateAddBtn();
+    if(!timerInt) timerInt=setInterval(renderLive,1000);
+  } else {
+    if(timerInt){ clearInterval(timerInt); timerInt=null; }
+    renderIdle();
+  }
+  renderHeader();
+}
+function renderIdle(){
+  const last = state.sessions[state.sessions.length-1];
+  const prev = state.sessions[state.sessions.length-2];
+  const box = document.getElementById("lastBox");
+  document.getElementById("emptyHint").classList.toggle("hidden", state.sessions.length>0);
+  if(!last){ box.innerHTML=""; return; }
+  const lv=sVol(last), pv=prev?sVol(prev):0;
+  const trend = pv>0 ? ((lv-pv)/pv*100) : null;
+  box.innerHTML =
+    '<div class="seclbl">Letztes Training</div><div class="cards">'+
+    '<div class="card"><div class="lbl">Datum</div><div class="val num">'+fmtShort(last.date)+'</div></div>'+
+    '<div class="card"><div class="lbl">Volumen</div><div class="val num accent">'+fmtKg(lv)+' kg</div>'+
+    (trend!==null?'<div class="sub2">'+(trend>=0?"+":"")+trend.toFixed(1)+' % vs. davor</div>':"")+'</div>'+
+    '<div class="card"><div class="lbl">Dauer</div><div class="val num">'+fmtDur(last.durationSec)+'</div></div>'+
+    '</div>';
+}
+function renderChips(){
+  const el=document.getElementById("machineChips");
+  el.innerHTML = state.machines.map(m=>
+    '<div class="chip'+(m===selMachine?" sel":"")+'" onclick="pickMachine(\''+esc(m).replace(/'/g,"\\'")+'\')">'+esc(m)+'</div>'
+  ).join("") + '<div class="chip" onclick="toggleAddMachine()">＋ Neu</div>';
+}
+function renderLive(){
+  if(!active) return;
+  const vol = active.sets.reduce((a,x)=>a+x.kg*x.reps,0);
+  const elapsed = Math.floor((Date.now()-active.start)/1000);
+  document.getElementById("liveTotal").innerHTML = fmtKg(vol)+' <small>kg</small>';
+  document.getElementById("liveTimer").textContent = "⏱ "+fmtDur(elapsed);
+  document.getElementById("liveSets").textContent = active.sets.length+" Sätze";
+  const last = state.sessions[state.sessions.length-1];
+  const lastVol = last?sVol(last):0;
+  const trendEl=document.getElementById("liveTrend");
+  if(lastVol>0){
+    const pct=(vol-lastVol)/lastVol*100;
+    trendEl.innerHTML='<span class="badge '+(pct>=0?"up":"down")+'">'+(pct>=0?"▲":"▼")+' '+Math.abs(pct).toFixed(1)+' %</span>';
+    document.getElementById("livePbar").innerHTML =
+      '<div class="progressbar"><div style="width:'+Math.min(100,vol/lastVol*100)+'%"></div></div>'+
+      '<div class="pbarlbl">'+Math.min(999,Math.round(vol/lastVol*100))+' % vom letzten Training ('+fmtKg(lastVol)+' kg)</div>';
+  } else { trendEl.innerHTML=""; document.getElementById("livePbar").innerHTML=""; }
+}
+function renderSets(){
+  if(!active) return;
+  const el=document.getElementById("setList");
+  el.innerHTML=[...active.sets].map((s,i)=>({s,i})).reverse().map(o=>
+    '<div class="setrow"><div><div class="m">'+esc(o.s.machine)+'</div>'+
+    '<div class="d">'+fmtKg(o.s.kg)+' kg × '+o.s.reps+' = <b>'+fmtKg(o.s.kg*o.s.reps)+' kg</b></div></div>'+
+    '<div class="x" onclick="removeSet('+o.i+')">✕</div></div>'
+  ).join("");
+}
+function renderHeader(){
+  const total=state.sessions.reduce((a,s)=>a+sVol(s),0);
+  document.getElementById("headSub").textContent =
+    state.sessions.length+" Trainings · "+fmtKg(total)+" kg gesamt bewegt";
+}
+
+// ================= Rendering: Verlauf =================
+function toggleExpand(id){ expandedId = expandedId===id?null:id; confirmDeleteId=null; renderHistory(); }
+function delSession(id, ev){
+  ev.stopPropagation();
+  if(confirmDeleteId!==id){ confirmDeleteId=id; renderHistory(); return; }
+  state.sessions = state.sessions.filter(s=>s.id!==id);
+  confirmDeleteId=null; if(expandedId===id) expandedId=null;
+  save(); renderHistory(); renderHeader(); renderIdle();
+  toast("Training gelöscht");
+}
+function cancelDel(ev){ ev.stopPropagation(); confirmDeleteId=null; renderHistory(); }
+function renderHistory(){
+  const el=document.getElementById("historyList");
+  if(!state.sessions.length){ el.innerHTML='<div class="center">Noch keine gespeicherten Trainings.</div>'; return; }
+  el.innerHTML=[...state.sessions].reverse().map(s=>{
+    const vol=sVol(s), open=expandedId===s.id;
+    let detail="";
+    if(open){
+      const by={};
+      for(const x of s.sets){ (by[x.machine]=by[x.machine]||[]).push(x); }
+      detail='<div class="detail">'+Object.entries(by).map(([m,sets])=>
+        '<div class="mgroup">'+esc(m)+' <span>· '+fmtKg(sets.reduce((a,x)=>a+x.kg*x.reps,0))+' kg</span></div>'+
+        sets.map(x=>'<div class="srow">'+fmtKg(x.kg)+' kg × '+x.reps+'</div>').join("")
+      ).join("")+
+      '<div style="display:flex;gap:14px;align-items:center">'+
+      '<span class="dellink" '+(confirmDeleteId===s.id?'style="font-weight:700;border:1px solid var(--bad);background:#FF6B6B18;padding:8px 12px;border-radius:10px"':'')+
+      ' onclick="delSession(\''+s.id+'\',event)">'+
+      (confirmDeleteId===s.id?"Wirklich löschen? Nochmal tippen":"Training löschen")+'</span>'+
+      (confirmDeleteId===s.id?'<span style="color:var(--dim);font-size:13px;cursor:pointer" onclick="cancelDel(event)">Abbrechen</span>':"")+
+      '</div></div>';
+    }
+    return '<div class="sess"><div class="head" onclick="toggleExpand(\''+s.id+'\')">'+
+      '<div><div style="font-weight:700;font-size:15px">'+fmtDate(s.date)+'</div>'+
+      '<div style="color:var(--dim);font-size:13px">'+fmtDur(s.durationSec)+' · '+s.sets.length+' Sätze</div></div>'+
+      '<div class="vol num">'+fmtKg(vol)+' kg</div></div>'+detail+'</div>';
+  }).join("");
+}
+
+// ================= Rendering: Fortschritt =================
+function lineChart(data, series, height){
+  // data: [{name, key1, key2...}], series: [{key,color}]
+  const W=440, H=height||190, padL=44, padR=12, padT=12, padB=24;
+  if(!data.length) return "";
+  let max=0;
+  for(const d of data) for(const s of series) max=Math.max(max, d[s.key]||0);
+  if(max===0) max=1;
+  const n=data.length;
+  const x=i => n===1 ? (padL+(W-padL-padR)/2) : padL+(W-padL-padR)*i/(n-1);
+  const y=v => padT+(H-padT-padB)*(1-v/max);
+  let out='<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">';
+  // Gitter + Y-Achse
+  for(let g=0; g<=3; g++){
+    const v=max*g/3, yy=y(v);
+    out+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="#343945" stroke-dasharray="3 3"/>';
+    out+='<text x="'+(padL-6)+'" y="'+(yy+3)+'" fill="#9BA1AD" font-size="10" text-anchor="end">'+
+      (v>=1000?(v/1000).toFixed(1).replace(".",",")+"k":Math.round(v))+'</text>';
+  }
+  // X-Beschriftung (max ~8 Labels)
+  const step=Math.max(1,Math.ceil(n/8));
+  for(let i=0;i<n;i+=step){
+    out+='<text x="'+x(i)+'" y="'+(H-6)+'" fill="#9BA1AD" font-size="10" text-anchor="middle">'+esc(data[i].name)+'</text>';
+  }
+  for(const s of series){
+    const pts=data.map((d,i)=>x(i)+","+y(d[s.key]||0)).join(" ");
+    out+='<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="2.5"/>';
+    for(let i=0;i<n;i++) out+='<circle cx="'+x(i)+'" cy="'+y(data[i][s.key]||0)+'" r="3" fill="'+s.color+'"/>';
+  }
+  return out+'</svg>';
+}
+function barChart(data, key, height){
+  const W=440, H=height||150, padL=40, padR=12, padT=10, padB=24;
+  if(!data.length) return "";
+  let max=Math.max(...data.map(d=>d[key]||0),1);
+  const n=data.length, bw=Math.min(34,(W-padL-padR)/n*0.6);
+  const x=i=>padL+(W-padL-padR)*(i+0.5)/n;
+  const y=v=>padT+(H-padT-padB)*(1-v/max);
+  let out='<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">';
+  for(let g=0;g<=2;g++){
+    const v=max*g/2, yy=y(v);
+    out+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="#343945" stroke-dasharray="3 3"/>';
+    out+='<text x="'+(padL-6)+'" y="'+(yy+3)+'" fill="#9BA1AD" font-size="10" text-anchor="end">'+Math.round(v)+'</text>';
+  }
+  const step=Math.max(1,Math.ceil(n/8));
+  for(let i=0;i<n;i+=step) out+='<text x="'+x(i)+'" y="'+(H-6)+'" fill="#9BA1AD" font-size="10" text-anchor="middle">'+esc(data[i].name)+'</text>';
+  for(let i=0;i<n;i++){
+    const v=data[i][key]||0;
+    out+='<rect x="'+(x(i)-bw/2)+'" y="'+y(v)+'" width="'+bw+'" height="'+(y(0)-y(v))+'" rx="5" fill="#FF6B2C33" stroke="#FF6B2C"/>';
+  }
+  return out+'</svg>';
+}
+function machineStats(){
+  const st={};
+  for(const sess of state.sessions) for(const x of sess.sets){
+    (st[x.machine]=st[x.machine]||[]).push({date:sess.date, kg:x.kg, vol:x.kg*x.reps});
+  }
+  return st;
+}
+function machineProgress(entries){
+  if(!entries||entries.length<2) return null;
+  const firstDate=entries[0].date, lastDate=entries[entries.length-1].date;
+  if(firstDate===lastDate) return null;
+  const fMax=Math.max(...entries.filter(e=>e.date===firstDate).map(e=>e.kg));
+  const lMax=Math.max(...entries.filter(e=>e.date===lastDate).map(e=>e.kg));
+  return fMax>0 ? (lMax-fMax)/fMax*100 : null;
+}
+function pickAnalysis(m){ analysisMachine = analysisMachine===m?null:m; renderStats(); }
+function renderStats(){
+  const el=document.getElementById("statsArea");
+  if(!state.sessions.length){
+    el.innerHTML='<div class="center">Sobald du Trainings gespeichert hast, siehst du hier deine Auswertungen.</div>'; return;
+  }
+  const vols=state.sessions.map(sVol);
+  const total=vols.reduce((a,b)=>a+b,0), avg=total/vols.length;
+  const bestIdx=vols.indexOf(Math.max(...vols));
+  const last=vols[vols.length-1], prev=vols.length>1?vols[vols.length-2]:0;
+  const trend=prev>0?(last-prev)/prev*100:null;
+  const chartData=state.sessions.map(s=>({name:fmtShort(s.date), Volumen:sVol(s), Dauer:Math.round(s.durationSec/60)}));
+  const mstats=machineStats();
+
+  let html='<div class="cards">'+
+    '<div class="card"><div class="lbl">Letztes vs. davor</div><div class="val num '+(trend!==null&&trend>=0?"accent":"")+'">'+
+      (trend!==null?(trend>=0?"+":"")+trend.toFixed(1)+" %":"–")+'</div></div>'+
+    '<div class="card"><div class="lbl">Ø Volumen</div><div class="val num">'+fmtKg(avg)+' kg</div></div>'+
+    '<div class="card"><div class="lbl">Bestes Training</div><div class="val num">'+fmtKg(vols[bestIdx])+' kg</div>'+
+      '<div class="sub2">'+fmtShort(state.sessions[bestIdx].date)+'</div></div>'+
+    '<div class="card"><div class="lbl">Gesamt bewegt</div><div class="val num accent">'+fmtKg(total)+' kg</div></div>'+
+    '</div>';
+
+  html+='<div class="seclbl">Volumen pro Training</div><div class="chartbox">'+
+    lineChart(chartData,[{key:"Volumen",color:"#FF6B2C"}])+'</div>';
+
+  html+='<div class="seclbl">Steigerung pro Gerät (Max-Gewicht, erstes → letztes Training)</div><div class="chips">';
+  for(const m of Object.keys(mstats)){
+    const p=machineProgress(mstats[m]);
+    html+='<div class="chip'+(analysisMachine===m?" sel":"")+'" onclick="pickAnalysis(\''+esc(m).replace(/'/g,"\\'")+'\')">'+esc(m)+
+      (p!==null?'<small class="'+(p>=0?"up":"down")+'">'+(p>=0?"+":"")+p.toFixed(0)+' %</small>':"")+'</div>';
+  }
+  html+='</div>';
+
+  if(analysisMachine && mstats[analysisMachine]){
+    const byDay={};
+    for(const e of mstats[analysisMachine]){
+      const d=fmtShort(e.date);
+      byDay[d]=byDay[d]||{name:d,maxkg:0,vol:0};
+      byDay[d].maxkg=Math.max(byDay[d].maxkg,e.kg);
+      byDay[d].vol+=e.vol;
+    }
+    const md=Object.values(byDay);
+    html+='<div class="chartbox" style="margin-top:12px">'+
+      '<div class="legend"><span><i style="background:#F2F0EB"></i>Max kg</span><span><i style="background:#FF6B2C"></i>Volumen</span></div>'+
+      lineChart(md,[{key:"maxkg",color:"#F2F0EB"},{key:"vol",color:"#FF6B2C"}],170)+'</div>';
+  }
+
+  html+='<div class="seclbl">Trainingsdauer (Minuten)</div><div class="chartbox">'+
+    barChart(chartData,"Dauer")+'</div>';
+
+  el.innerHTML=html;
+}
+
+// ================= Export / Import =================
+function backupName(){
+  const d=new Date();
+  return "volumentracker-backup-"+d.toISOString().slice(0,10)+".json";
+}
+async function exportData(){
+  const payload=JSON.stringify({app:"volumentracker",version:1,exportedAt:new Date().toISOString(),...state},null,2);
+  const file=new File([payload], backupName(), {type:"application/json"});
+  // Bevorzugt: iOS-Teilen-Menü → "In Dateien sichern" → iCloud Drive
+  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+    try {
+      await navigator.share({files:[file], title:"Volumentracker Backup"});
+      toast("Backup erstellt – in Dateien/iCloud sichern");
+      return;
+    } catch(e){ if(e.name==="AbortError") return; }
+  }
+  // Fallback: normaler Download
+  const url=URL.createObjectURL(new Blob([payload],{type:"application/json"}));
+  const a=document.createElement("a");
+  a.href=url; a.download=backupName();
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  toast("Backup heruntergeladen");
+}
+function importData(ev){
+  const file=ev.target.files && ev.target.files[0];
+  ev.target.value="";
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try {
+      const d=JSON.parse(reader.result);
+      if(!d || !Array.isArray(d.sessions)) throw new Error("Format");
+      if(!confirm("Backup vom "+(d.exportedAt?new Date(d.exportedAt).toLocaleDateString("de-DE"):"?")+
+        " mit "+d.sessions.length+" Trainings importieren?\n\nDie aktuellen Daten werden ersetzt.")) return;
+      state={
+        machines: Array.isArray(d.machines)&&d.machines.length ? d.machines : DEFAULT_MACHINES.slice(),
+        sessions: d.sessions
+      };
+      state.sessions.sort((a,b)=>new Date(a.date)-new Date(b.date));
+      selMachine=state.machines[0];
+      save();
+      renderHeader(); renderIdle(); renderDataTab();
+      toast("Import erfolgreich: "+state.sessions.length+" Trainings");
+    } catch(e){
+      alert("Import fehlgeschlagen: Die Datei ist kein gültiges Volumentracker-Backup.");
+    }
+  };
+  reader.readAsText(file);
+}
+function renderDataTab(){
+  const total=state.sessions.reduce((a,s)=>a+sVol(s),0);
+  const sets=state.sessions.reduce((a,s)=>a+s.sets.length,0);
+  document.getElementById("dataStats").innerHTML=
+    '<div class="card"><div class="lbl">Trainings</div><div class="val num">'+state.sessions.length+'</div></div>'+
+    '<div class="card"><div class="lbl">Sätze</div><div class="val num">'+sets+'</div></div>'+
+    '<div class="card"><div class="lbl">Gesamt</div><div class="val num accent">'+fmtKg(total)+' kg</div></div>';
+}
+
+// ================= Start =================
+load();
+renderTraining();
+</script>
+</body>
+</html>
