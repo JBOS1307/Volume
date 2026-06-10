@@ -391,8 +391,9 @@
 <script>
 "use strict";
 // ================= Version =================
-const VERSION = "1.0";
+const VERSION = "1.1";
 const CHANGELOG = [
+  { v: "1.1", d: "10.06.2026", t: "Gespeicherte Trainings nachträglich bearbeiten: Sätze ändern, löschen und ergänzen, Datum und Dauer anpassen." },
   { v: "1.0", d: "10.06.2026", t: "Trainingsvorlagen (z. B. Full Body), Pausentimer nach Gerät-Abschluss, Einstellungen (Pausendauer, Standardwerte), Anzeige der letzten Werte pro Gerät, Impressum & Versionsübersicht." },
   { v: "0.9", d: "10.06.2026", t: "Erste Version: Training mit Timer, Volumen-Tracking, Verlauf, Fortschritts-Auswertungen, Export/Import über iCloud Drive." },
 ];
@@ -710,7 +711,10 @@ function renderHeader(){
 }
 
 // ================= Rendering: Verlauf =================
-function toggleExpand(id){ expandedId = expandedId===id?null:id; confirmDeleteId=null; renderHistory(); }
+function toggleExpand(id){
+  if(editSessionId===id){ return; } // im Bearbeiten-Modus nicht zuklappen
+  expandedId = expandedId===id?null:id; confirmDeleteId=null; renderHistory();
+}
 function delSession(id, ev){
   ev.stopPropagation();
   if(confirmDeleteId!==id){ confirmDeleteId=id; renderHistory(); return; }
@@ -720,6 +724,72 @@ function delSession(id, ev){
   toast("Training gelöscht");
 }
 function cancelDel(ev){ ev.stopPropagation(); confirmDeleteId=null; renderHistory(); }
+// --- Training nachträglich bearbeiten ---
+let editSessionId = null, editDraft = null;
+function startEditSession(id, ev){
+  ev.stopPropagation();
+  const s = state.sessions.find(x=>x.id===id); if(!s) return;
+  editSessionId = id;
+  editDraft = JSON.parse(JSON.stringify(s)); // tiefe Kopie
+  expandedId = id;
+  renderHistory();
+}
+function cancelEditSession(ev){
+  if(ev) ev.stopPropagation();
+  editSessionId = null; editDraft = null;
+  renderHistory();
+}
+function editSetVal(i, key, val, ev){
+  if(ev) ev.stopPropagation();
+  if(!editDraft || !editDraft.sets[i]) return;
+  const n = Number(val);
+  if(isFinite(n)) editDraft.sets[i][key] = key==="reps" ? Math.max(1,Math.round(n)) : Math.max(0,n);
+}
+function editSetMachine(i, val, ev){
+  if(ev) ev.stopPropagation();
+  if(editDraft && editDraft.sets[i]) editDraft.sets[i].machine = val;
+}
+function editDelSet(i, ev){
+  ev.stopPropagation();
+  if(!editDraft) return;
+  editDraft.sets.splice(i,1);
+  renderHistory();
+}
+function editAddSet(ev){
+  ev.stopPropagation();
+  if(!editDraft) return;
+  const m = document.getElementById("editNewMachine").value;
+  const kg = Number(document.getElementById("editNewKg").value);
+  const reps = Number(document.getElementById("editNewReps").value);
+  if(!m || !isFinite(kg) || kg<=0 || !isFinite(reps) || reps<1){ toast("Bitte Gerät, kg und Reps angeben"); return; }
+  editDraft.sets.push({machine:m, kg, reps:Math.round(reps), ts:Date.now()});
+  renderHistory();
+}
+function editMeta(key, val, ev){
+  if(ev) ev.stopPropagation();
+  if(!editDraft) return;
+  if(key==="durationMin"){
+    const n=Number(val);
+    if(isFinite(n) && n>=0) editDraft.durationSec = Math.round(n*60);
+  }
+  if(key==="date" && val){
+    const old=new Date(editDraft.date);
+    const [y,mo,d]=val.split("-").map(Number);
+    if(y&&mo&&d){ old.setFullYear(y,mo-1,d); editDraft.date=old.toISOString(); }
+  }
+}
+function saveEditSession(ev){
+  ev.stopPropagation();
+  if(!editDraft) return;
+  if(!editDraft.sets.length){ toast("Mindestens ein Satz nötig – sonst Training löschen"); return; }
+  const idx = state.sessions.findIndex(x=>x.id===editSessionId);
+  if(idx>=0) state.sessions[idx] = editDraft;
+  state.sessions.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  save();
+  editSessionId=null; editDraft=null;
+  renderHistory(); renderHeader(); renderIdle();
+  toast("Änderungen gespeichert");
+}
 function sessionToTpl(id, ev){
   ev.stopPropagation();
   const s=state.sessions.find(x=>x.id===id); if(!s) return;
@@ -733,9 +803,38 @@ function renderHistory(){
   const el=document.getElementById("historyList");
   if(!state.sessions.length){ el.innerHTML='<div class="center">Noch keine gespeicherten Trainings.</div>'; return; }
   el.innerHTML=[...state.sessions].reverse().map(s=>{
-    const vol=sVol(s), open=expandedId===s.id;
+    const vol=sVol(s), open=expandedId===s.id, editing=editSessionId===s.id;
     let detail="";
-    if(open){
+    if(open && editing && editDraft){
+      const dateVal = editDraft.date.slice(0,10);
+      const durMin = Math.round(editDraft.durationSec/60);
+      const mOpts = m => state.machines.map(x=>'<option'+(x===m?" selected":"")+'>'+esc(x)+'</option>').join("");
+      detail='<div class="detail" onclick="event.stopPropagation()">'+
+        '<div class="seclbl" style="margin-top:12px">Datum &amp; Dauer</div>'+
+        '<div class="row">'+
+        '<input class="txt" type="date" value="'+dateVal+'" onchange="editMeta(\'date\',this.value,event)" style="flex:1">'+
+        '<input class="txt" type="number" inputmode="numeric" value="'+durMin+'" onchange="editMeta(\'durationMin\',this.value,event)" style="width:90px" title="Minuten">'+
+        '<span style="align-self:center;color:var(--dim);font-size:13px">min</span></div>'+
+        '<div class="seclbl">Sätze</div>'+
+        editDraft.sets.map((x,i)=>
+          '<div class="row" style="margin-bottom:8px;align-items:center">'+
+          '<select class="txt" style="flex:1.4;padding:10px" onchange="editSetMachine('+i+',this.value,event)">'+mOpts(x.machine)+'</select>'+
+          '<input class="txt" type="number" inputmode="decimal" value="'+x.kg+'" onchange="editSetVal('+i+',\'kg\',this.value,event)" style="width:74px;text-align:center">'+
+          '<span style="color:var(--dim)">×</span>'+
+          '<input class="txt" type="number" inputmode="numeric" value="'+x.reps+'" onchange="editSetVal('+i+',\'reps\',this.value,event)" style="width:62px;text-align:center">'+
+          '<span style="color:var(--dim);font-size:20px;cursor:pointer;padding:4px" onclick="editDelSet('+i+',event)">✕</span></div>'
+        ).join("")+
+        '<div class="seclbl">Satz hinzufügen</div>'+
+        '<div class="row" style="align-items:center">'+
+        '<select class="txt" id="editNewMachine" style="flex:1.4;padding:10px">'+mOpts(state.machines[0])+'</select>'+
+        '<input class="txt" id="editNewKg" type="number" inputmode="decimal" placeholder="kg" style="width:74px;text-align:center">'+
+        '<input class="txt" id="editNewReps" type="number" inputmode="numeric" placeholder="Reps" style="width:62px;text-align:center">'+
+        '<button class="okbtn" style="padding:10px 14px" onclick="editAddSet(event)">＋</button></div>'+
+        '<div class="row" style="margin-top:16px">'+
+        '<button class="iobtn" onclick="cancelEditSession(event)">Abbrechen</button>'+
+        '<button class="okbtn" style="flex:1;padding:14px 0" onclick="saveEditSession(event)">Änderungen speichern</button>'+
+        '</div></div>';
+    } else if(open){
       const by={};
       for(const x of s.sets){ (by[x.machine]=by[x.machine]||[]).push(x); }
       detail='<div class="detail">'+Object.entries(by).map(([m,sets])=>
@@ -743,6 +842,7 @@ function renderHistory(){
         sets.map(x=>'<div class="srow">'+fmtKg(x.kg)+' kg × '+x.reps+'</div>').join("")
       ).join("")+
       '<div style="display:flex;gap:14px;align-items:center;margin-top:14px;flex-wrap:wrap">'+
+      '<span class="actlink" onclick="startEditSession(\''+s.id+'\',event)">Bearbeiten</span>'+
       '<span class="actlink" onclick="sessionToTpl(\''+s.id+'\',event)">Als Vorlage speichern</span>'+
       '<span class="dellink" '+(confirmDeleteId===s.id?'style="font-weight:700;border:1px solid var(--bad);background:#FF6B6B18;padding:8px 12px;border-radius:10px"':'')+
       ' onclick="delSession(\''+s.id+'\',event)">'+

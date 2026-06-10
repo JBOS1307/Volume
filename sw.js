@@ -1,7 +1,7 @@
 // Volumentracker Service Worker
 // Strategie: Cache-first. Beim ersten Besuch wird alles gespeichert,
 // danach läuft die App komplett offline. Bei Updates: CACHE-Version hochzählen.
-const CACHE = "volumentracker-v2";
+const CACHE = "volumentracker-v3";
 const ASSETS = [
   "./",
   "./index.html",
