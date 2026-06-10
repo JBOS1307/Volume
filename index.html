@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Volumentracker</title>
-<!-- iOS: Vollbild-Modus, wenn zum Home-Bildschirm hinzugefügt -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Volumen">
@@ -12,7 +11,6 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <script>
-  // Service Worker registrieren → App läuft nach dem ersten Öffnen komplett offline
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("sw.js").catch(() => {});
@@ -71,6 +69,7 @@
     white-space: nowrap;
   }
   .chip.sel { background: var(--accent); color: #1A1A1A; border-color: var(--accent); }
+  .chip.done { opacity: .45; text-decoration: line-through; }
   .chip small { font-weight: 700; margin-left: 6px; }
   .chip small.up { color: var(--good); } .chip small.down { color: var(--bad); }
   .chip.sel small { color: #1A1A1A; }
@@ -91,18 +90,32 @@
     background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
     padding: 20px 18px; text-align: center;
   }
-  .live .total { font-size: 54px; color: var(--accent); line-height: 1.05; margin: 6px 0 2px; }
+  .live .total { font-size: 50px; color: var(--accent); line-height: 1.05; margin: 6px 0 2px; }
   .live .total small { font-size: 22px; color: var(--dim); }
-  .live .meta { display: flex; justify-content: center; gap: 16px; margin-top: 8px; align-items: center; font-size: 15px; }
+  .live .meta { display: flex; justify-content: center; gap: 16px; margin-top: 8px; align-items: center; font-size: 15px; flex-wrap: wrap; }
   .progressbar { height: 8px; border-radius: 999px; background: var(--panel-soft); overflow: hidden; margin-top: 12px; }
   .progressbar > div { height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s; }
   .pbarlbl { font-size: 11px; color: var(--dim); margin-top: 4px; }
 
-  .badge {
-    font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+  .pause {
+    background: linear-gradient(135deg, #2A3140, #1F222A);
+    border: 1px solid var(--accent); border-radius: 18px; padding: 16px;
+    text-align: center; margin-top: 14px;
   }
+  .pause .t { font-size: 42px; color: var(--accent); line-height: 1; }
+  .pause .lbl2 { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 1.5px; }
+  .pause .btns { display: flex; gap: 8px; margin-top: 12px; justify-content: center; }
+  .pause .btns button {
+    padding: 10px 18px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--panel-soft); color: var(--text); font-weight: 700; cursor: pointer; font-family: inherit;
+  }
+
+  .badge { font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
   .badge.up { background: #5BD08C22; color: var(--good); }
   .badge.down { background: #FF6B6B22; color: var(--bad); }
+
+  .lastinfo { font-size: 13px; color: var(--dim); margin-top: 8px; }
+  .lastinfo b { color: var(--text); font-weight: 600; }
 
   .setrow {
     display: flex; align-items: center; justify-content: space-between;
@@ -114,17 +127,27 @@
   .setrow .d b { color: var(--accent); font-weight: 600; }
   .setrow .x { color: var(--dim); font-size: 20px; padding: 4px 8px; cursor: pointer; }
 
-  .sess {
+  .sess, .tpl {
     background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
     margin-bottom: 10px; overflow: hidden;
   }
-  .sess .head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; cursor: pointer; }
+  .sess .head, .tpl .head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; cursor: pointer; }
   .sess .vol { font-size: 22px; color: var(--accent); }
   .sess .detail { padding: 0 16px 14px; border-top: 1px solid var(--line); }
   .sess .mgroup { margin-top: 12px; font-size: 14px; font-weight: 600; }
   .sess .mgroup span { color: var(--dim); font-weight: 400; }
   .sess .srow { color: var(--dim); font-size: 13px; margin-left: 8px; }
-  .dellink { margin-top: 14px; color: var(--bad); font-size: 13px; cursor: pointer; display: inline-block; }
+  .dellink { color: var(--bad); font-size: 13px; cursor: pointer; display: inline-block; }
+  .actlink { color: var(--accent); font-size: 13px; cursor: pointer; display: inline-block; }
+
+  .tplcard {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 8px; cursor: pointer;
+  }
+  .tplcard .n { font-weight: 700; font-size: 16px; }
+  .tplcard .i { color: var(--dim); font-size: 13px; margin-top: 2px; }
+  .tplcard .go { color: var(--accent); font-size: 22px; font-weight: 700; }
 
   .chartbox {
     background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
@@ -164,6 +187,19 @@
     cursor: pointer; font-family: inherit;
   }
   .note { font-size: 12px; color: var(--dim); line-height: 1.5; margin-top: 8px; }
+  .settingrow {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 14px; margin-bottom: 8px; gap: 10px; flex-wrap: wrap;
+  }
+  .settingrow .sl { font-size: 14px; font-weight: 600; }
+  .settingrow .sd { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .imptext { font-size: 13px; color: var(--dim); line-height: 1.6; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .imptext b { color: var(--text); }
+  .verrow { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .verrow:last-child { border-bottom: none; }
+  .verrow .v { font-weight: 700; color: var(--accent); min-width: 40px; }
+  .verrow .d2 { color: var(--dim); }
   .toast {
     position: fixed; left: 50%; transform: translateX(-50%);
     bottom: calc(90px + env(safe-area-inset-bottom));
@@ -186,17 +222,19 @@
   <!-- ============ TRAINING ============ -->
   <section id="tab-training">
     <div id="idleView">
-      <button class="bigbtn primary" onclick="startTraining()">▶ Training starten</button>
+      <div id="templateList"></div>
+      <button class="bigbtn primary" onclick="startTraining(null)">▶ Freies Training starten</button>
       <div id="lastBox"></div>
       <div id="emptyHint" class="empty hidden">
         Noch keine Trainings gespeichert. Starte dein erstes Training, trag deine Sätze ein –
-        und beim Beenden landet alles im Verlauf.
+        und beim Beenden landet alles im Verlauf. Unter „Mehr" kannst du Vorlagen wie
+        „Full Body" anlegen.
       </div>
     </div>
 
     <div id="activeView" class="hidden">
       <div class="live">
-        <div class="lbl" style="font-size:12px;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase">Gesamtgewicht heute</div>
+        <div style="font-size:12px;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase" id="liveTitle">Gesamtgewicht heute</div>
         <div class="total num" id="liveTotal">0 <small>kg</small></div>
         <div class="meta">
           <span class="num" id="liveTimer">⏱ 0:00</span>
@@ -206,14 +244,24 @@
         <div id="livePbar"></div>
       </div>
 
-      <div class="seclbl">Gerät</div>
+      <div id="pauseBox" class="pause hidden">
+        <div class="lbl2">Pause</div>
+        <div class="t num" id="pauseTime">1:00</div>
+        <div class="btns">
+          <button onclick="pausePlus(30)">+30 s</button>
+          <button onclick="endPause()">Überspringen</button>
+        </div>
+      </div>
+
+      <div class="seclbl" id="machineSecLbl">Gerät</div>
       <div class="chips" id="machineChips"></div>
       <div class="row hidden" id="addMachineRow" style="margin-top:8px">
         <input class="txt" id="newMachineInput" placeholder="Gerätename">
         <button class="okbtn" onclick="addMachine()">OK</button>
       </div>
+      <div class="lastinfo" id="lastInfo"></div>
 
-      <div style="display:flex;gap:18px;margin-top:16px;flex-wrap:wrap">
+      <div style="display:flex;gap:18px;margin-top:14px;flex-wrap:wrap">
         <div>
           <div class="seclbl" style="margin:0 0 6px">Gewicht (kg)</div>
           <div class="stepper">
@@ -233,6 +281,7 @@
       </div>
 
       <button class="bigbtn outline" style="margin-top:16px" onclick="addSet()" id="addSetBtn">＋ Satz eintragen</button>
+      <button class="bigbtn" style="margin-top:10px" onclick="finishMachine()" id="finishMachineBtn">✓ Gerät abschließen → Pause</button>
       <div id="setList" style="margin-top:16px"></div>
       <button class="bigbtn dark" style="margin-top:12px" onclick="finishTraining()" id="finishBtn">■ Training beenden &amp; speichern</button>
       <div id="discardCancel" class="center hidden" style="cursor:pointer;font-size:13px" onclick="cancelDiscard()">Abbrechen, Training läuft weiter</div>
@@ -249,22 +298,84 @@
     <div id="statsArea"></div>
   </section>
 
-  <!-- ============ DATEN ============ -->
-  <section id="tab-daten" class="hidden">
-    <div class="seclbl" style="margin-top:4px">Backup &amp; Wiederherstellung</div>
+  <!-- ============ MEHR ============ -->
+  <section id="tab-mehr" class="hidden">
+
+    <div class="seclbl" style="margin-top:4px">Trainingsvorlagen</div>
+    <div id="tplList"></div>
+    <button class="iobtn" style="width:100%" onclick="openTplEditor(null)">＋ Neue Vorlage anlegen</button>
+
+    <div id="tplEditor" class="hidden" style="margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px">
+      <div class="seclbl" style="margin:0 0 8px">Name der Vorlage</div>
+      <input class="txt" id="tplName" placeholder="z. B. Full Body">
+      <div class="seclbl">Geräte in Reihenfolge antippen</div>
+      <div class="chips" id="tplMachineChips"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="iobtn" onclick="closeTplEditor()">Abbrechen</button>
+        <button class="okbtn" style="flex:1;padding:14px 0" onclick="saveTpl()">Vorlage speichern</button>
+      </div>
+    </div>
+
+    <div class="seclbl">Einstellungen</div>
+    <div class="settingrow">
+      <div>
+        <div class="sl">Pausendauer</div>
+        <div class="sd">Timer nach „Gerät abschließen"</div>
+      </div>
+      <div class="stepper">
+        <button onclick="setPause(-15)">−</button>
+        <input id="pauseSetInput" readonly value="1:00" style="width:80px">
+        <button onclick="setPause(15)">+</button>
+      </div>
+    </div>
+    <div class="settingrow">
+      <div>
+        <div class="sl">Standard-Gewicht</div>
+        <div class="sd">Vorbelegung bei neuen Geräten (kg)</div>
+      </div>
+      <div class="stepper">
+        <button onclick="setDef('defaultKg',-2.5)">−</button>
+        <input id="defKgInput" type="number" inputmode="decimal" onchange="defChanged()" value="40">
+        <button onclick="setDef('defaultKg',2.5)">+</button>
+      </div>
+    </div>
+    <div class="settingrow">
+      <div>
+        <div class="sl">Standard-Wiederholungen</div>
+        <div class="sd">Vorbelegung bei neuen Geräten</div>
+      </div>
+      <div class="stepper">
+        <button onclick="setDef('defaultReps',-1)">−</button>
+        <input id="defRepsInput" type="number" inputmode="numeric" onchange="defChanged()" value="12">
+        <button onclick="setDef('defaultReps',1)">+</button>
+      </div>
+    </div>
+
+    <div class="seclbl">Backup &amp; Wiederherstellung</div>
     <div class="row">
       <button class="iobtn" onclick="exportData()">⬆ Exportieren</button>
       <button class="iobtn" onclick="document.getElementById('importFile').click()">⬇ Importieren</button>
     </div>
     <input type="file" id="importFile" accept=".json,application/json" class="hidden" onchange="importData(event)">
     <div class="note">
-      <b>Export:</b> Es öffnet sich das Teilen-Menü. Wähle <b>„In Dateien sichern"</b> →
-      <b>iCloud Drive</b> → deinen Ordner (z.&nbsp;B. „Volumentracker") → Sichern.<br><br>
-      <b>Import:</b> Es öffnet sich die Dateien-App. Navigiere zu deinem iCloud-Ordner
-      und wähle die Backup-Datei aus. Die aktuellen Daten werden dabei ersetzt.
+      <b>Export:</b> Teilen-Menü → „In Dateien sichern" → iCloud Drive → dein Ordner.<br>
+      <b>Import:</b> Backup-Datei aus iCloud auswählen – ersetzt die aktuellen Daten.
     </div>
-    <div class="seclbl">Aktueller Stand</div>
-    <div class="cards" id="dataStats"></div>
+    <div class="cards" id="dataStats" style="margin-top:10px"></div>
+
+    <div class="seclbl">Impressum</div>
+    <div class="imptext">
+      <b>Volumentracker</b> – private, nicht-kommerzielle Trainings-App.<br>
+      Erstellt von Jan (Osnabrück) mit Unterstützung von Claude (Anthropic).<br><br>
+      <b>Datenschutz:</b> Diese App verwendet keine Server, keine Cookies und kein Tracking.
+      Sämtliche Trainingsdaten werden ausschließlich lokal auf deinem Gerät gespeichert
+      und niemals übertragen. Backups erstellst du selbst über die Export-Funktion.<br><br>
+      <b>Haftung:</b> Nutzung auf eigene Verantwortung. Keine Gewähr für Richtigkeit
+      der Berechnungen. Kein Ersatz für medizinische oder trainingswissenschaftliche Beratung.
+    </div>
+
+    <div class="seclbl">Versionsübersicht</div>
+    <div class="imptext" id="versionList"></div>
   </section>
 </main>
 
@@ -272,22 +383,31 @@
   <div id="nav-training" class="sel" onclick="showTab('training')">Training</div>
   <div id="nav-verlauf" onclick="showTab('verlauf')">Verlauf</div>
   <div id="nav-fortschritt" onclick="showTab('fortschritt')">Fortschritt</div>
-  <div id="nav-daten" onclick="showTab('daten')">Daten</div>
+  <div id="nav-mehr" onclick="showTab('mehr')">Mehr</div>
 </nav>
 
 <div class="toast" id="toast"></div>
 
 <script>
 "use strict";
+// ================= Version =================
+const VERSION = "1.0";
+const CHANGELOG = [
+  { v: "1.0", d: "10.06.2026", t: "Trainingsvorlagen (z. B. Full Body), Pausentimer nach Gerät-Abschluss, Einstellungen (Pausendauer, Standardwerte), Anzeige der letzten Werte pro Gerät, Impressum & Versionsübersicht." },
+  { v: "0.9", d: "10.06.2026", t: "Erste Version: Training mit Timer, Volumen-Tracking, Verlauf, Fortschritts-Auswertungen, Export/Import über iCloud Drive." },
+];
+
 // ================= Daten =================
 const DEFAULT_MACHINES = ["Beinpresse","Latzug","Rudern","Brustpresse","Schulterdrücken","Bauchmaschine","Beinbeuger"];
 const LS_DATA = "vt-data", LS_ACTIVE = "vt-active";
+const DEFAULT_SETTINGS = { pauseSec: 60, defaultKg: 40, defaultReps: 12 };
 
-let state = { machines: DEFAULT_MACHINES.slice(), sessions: [] };
-let active = null;            // { start, sets: [{machine,kg,reps,ts}] }
+let state = { machines: DEFAULT_MACHINES.slice(), sessions: [], templates: [], settings: {...DEFAULT_SETTINGS} };
+let active = null; // { start, sets, templateId, doneMachines:[], pauseUntil }
 let selMachine = DEFAULT_MACHINES[0];
 let confirmDeleteId = null, confirmDiscard = false, expandedId = null, analysisMachine = null;
-let timerInt = null;
+let confirmTplDelete = null, editingTplId = null, tplSelMachines = [];
+let timerInt = null, audioCtx = null, pauseBeeped = false;
 
 // --- Speicher-Wrapper: localStorage, mit In-Memory-Fallback für Testumgebungen ---
 let _mem = {}, TEST_MODE = false;
@@ -299,10 +419,18 @@ const store = {
   remove(k){ if(TEST_MODE){ delete _mem[k]; return; } try { localStorage.removeItem(k); } catch(e){ delete _mem[k]; } }
 };
 
+function migrate(d){
+  // Daten aus v0.9 (ohne templates/settings) bleiben voll kompatibel
+  if(!Array.isArray(d.templates)) d.templates = [];
+  if(!d.settings) d.settings = {...DEFAULT_SETTINGS};
+  d.settings = {...DEFAULT_SETTINGS, ...d.settings};
+  return d;
+}
 function load() {
-  try { const d = JSON.parse(store.get(LS_DATA)); if (d && d.sessions) state = d; } catch(e) {}
+  try { const d = JSON.parse(store.get(LS_DATA)); if (d && d.sessions) state = migrate(d); } catch(e) {}
   try { const a = JSON.parse(store.get(LS_ACTIVE)); if (a && a.start) active = a; } catch(e) {}
   if (!state.machines || !state.machines.length) state.machines = DEFAULT_MACHINES.slice();
+  if (active && !Array.isArray(active.doneMachines)) active.doneMachines = [];
   selMachine = state.machines[0];
 }
 function save() { store.set(LS_DATA, JSON.stringify(state)); }
@@ -316,11 +444,13 @@ const fmtKg = n => new Intl.NumberFormat("de-DE",{maximumFractionDigits:1}).form
 const fmtDate = iso => new Date(iso).toLocaleDateString("de-DE",{weekday:"short",day:"2-digit",month:"2-digit",year:"2-digit"});
 const fmtShort = iso => new Date(iso).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
 function fmtDur(sec){
-  const h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), s=Math.floor(sec%60);
+  sec=Math.max(0,Math.floor(sec));
+  const h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), s=sec%60;
   return h>0 ? h+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0") : m+":"+String(s).padStart(2,"0");
 }
 const sVol = s => s.sets.reduce((a,x)=>a+x.kg*x.reps,0);
 const esc = t => String(t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const escJs = t => String(t).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
 function toast(msg){
   const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
   setTimeout(()=>t.classList.remove("show"), 2600);
@@ -331,27 +461,56 @@ function lastValues(){
   if(active) for(const x of active.sets) map[x.machine]={kg:x.kg,reps:x.reps};
   return map;
 }
+function tplById(id){ return state.templates.find(t=>t.id===id) || null; }
+function beep(){
+  try {
+    if(!audioCtx) return;
+    const t0=audioCtx.currentTime;
+    for(const [off,f] of [[0,880],[0.18,880],[0.36,1175]]){
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.frequency.value=f; o.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(0.25, t0+off); g.gain.exponentialRampToValueAtTime(0.001, t0+off+0.15);
+      o.start(t0+off); o.stop(t0+off+0.16);
+    }
+  } catch(e){}
+}
 
 // ================= Tabs =================
 function showTab(t){
-  for(const id of ["training","verlauf","fortschritt","daten"]){
+  for(const id of ["training","verlauf","fortschritt","mehr"]){
     document.getElementById("tab-"+id).classList.toggle("hidden", id!==t);
     document.getElementById("nav-"+id).classList.toggle("sel", id===t);
   }
   if(t==="verlauf") renderHistory();
   if(t==="fortschritt") renderStats();
-  if(t==="daten") renderDataTab();
+  if(t==="mehr") renderMehr();
 }
 
 // ================= Training =================
-function startTraining(){
-  active = { start: Date.now(), sets: [] };
+function startTraining(tplId){
+  const tpl = tplId ? tplById(tplId) : null;
+  active = { start: Date.now(), sets: [], templateId: tpl?tpl.id:null, doneMachines: [], pauseUntil: null };
+  if(tpl && tpl.machines.length) selMachine = tpl.machines[0];
   saveActive(); renderTraining();
+  applyLastValues(selMachine);
+}
+function applyLastValues(m){
+  const lv = lastValues()[m];
+  document.getElementById("kgInput").value = lv ? lv.kg : state.settings.defaultKg;
+  document.getElementById("repsInput").value = lv ? lv.reps : state.settings.defaultReps;
+  updateAddBtn(); renderLastInfo();
+}
+function renderLastInfo(){
+  const el=document.getElementById("lastInfo");
+  const lv=lastValues()[selMachine];
+  el.innerHTML = lv
+    ? 'Letztes Mal an <b>'+esc(selMachine)+'</b>: <b>'+fmtKg(lv.kg)+' kg × '+lv.reps+'</b>'
+    : 'Noch keine Werte für <b>'+esc(selMachine)+'</b> – Standardwerte vorbelegt.';
 }
 function bump(which, d){
   const el = document.getElementById(which==="kg"?"kgInput":"repsInput");
   const min = which==="kg"?0:1;
-  el.value = Math.max(min, +( (Number(el.value)||0) + d ).toFixed(2));
+  el.value = Math.max(min, +(((Number(el.value)||0) + d)).toFixed(2));
   updateAddBtn();
 }
 function updateAddBtn(){
@@ -361,9 +520,7 @@ function updateAddBtn(){
 }
 function pickMachine(m){
   selMachine = m;
-  const lv = lastValues()[m];
-  if(lv){ document.getElementById("kgInput").value=lv.kg; document.getElementById("repsInput").value=lv.reps; }
-  renderChips(); updateAddBtn();
+  renderChips(); applyLastValues(m);
 }
 function toggleAddMachine(){ document.getElementById("addMachineRow").classList.toggle("hidden"); }
 function addMachine(){
@@ -380,11 +537,37 @@ function addSet(){
   const reps=Number(document.getElementById("repsInput").value)||0;
   if(kg<=0||reps<=0||!selMachine) return;
   active.sets.push({machine:selMachine,kg,reps,ts:Date.now()});
-  saveActive(); renderLive(); renderSets();
+  saveActive(); renderLive(); renderSets(); renderLastInfo();
 }
 function removeSet(i){
   active.sets.splice(i,1);
   saveActive(); renderLive(); renderSets();
+}
+// --- Gerät abschließen + Pausentimer ---
+function finishMachine(){
+  if(!active || !selMachine) return;
+  if(!active.doneMachines.includes(selMachine)) active.doneMachines.push(selMachine);
+  // Audio beim Nutzer-Tippen freischalten (für den Piepton am Pausenende)
+  try { audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+        if(audioCtx.state==="suspended") audioCtx.resume(); } catch(e){}
+  active.pauseUntil = Date.now() + state.settings.pauseSec*1000;
+  pauseBeeped = false;
+  // Nächstes offenes Gerät der Vorlage vorwählen
+  const tpl = active.templateId ? tplById(active.templateId) : null;
+  if(tpl){
+    const next = tpl.machines.find(m=>!active.doneMachines.includes(m));
+    if(next) selMachine = next;
+  }
+  saveActive(); renderChips(); applyLastValues(selMachine); renderLive();
+  toast(state.settings.pauseSec >= 60 ? "Pause läuft – gut gemacht 💪" : "Pause läuft");
+}
+function pausePlus(sec){
+  if(!active || !active.pauseUntil) return;
+  active.pauseUntil += sec*1000; saveActive(); renderLive();
+}
+function endPause(){
+  if(!active) return;
+  active.pauseUntil = null; saveActive(); renderLive();
 }
 function finishTraining(){
   if(!active) return;
@@ -400,11 +583,13 @@ function finishTraining(){
     active=null; confirmDiscard=false; saveActive(); renderTraining(); return;
   }
   const end=Date.now();
+  const tpl = active.templateId ? tplById(active.templateId) : null;
   state.sessions.push({
     id:"s_"+end,
     date:new Date(active.start).toISOString(),
     durationSec:Math.round((end-active.start)/1000),
-    sets:active.sets
+    sets:active.sets,
+    templateName: tpl ? tpl.name : null
   });
   state.sessions.sort((a,b)=>new Date(a.date)-new Date(b.date));
   save();
@@ -428,7 +613,11 @@ function renderTraining(){
   document.getElementById("activeView").classList.toggle("hidden", !active);
   cancelDiscard();
   if(active){
-    renderChips(); renderLive(); renderSets(); updateAddBtn();
+    const tpl = active.templateId ? tplById(active.templateId) : null;
+    document.getElementById("liveTitle").textContent = tpl ? tpl.name+" – Gesamtgewicht" : "Gesamtgewicht heute";
+    document.getElementById("finishMachineBtn").textContent =
+      "✓ Gerät abschließen → Pause "+fmtDur(state.settings.pauseSec);
+    renderChips(); renderLive(); renderSets(); updateAddBtn(); renderLastInfo();
     if(!timerInt) timerInt=setInterval(renderLive,1000);
   } else {
     if(timerInt){ clearInterval(timerInt); timerInt=null; }
@@ -437,6 +626,16 @@ function renderTraining(){
   renderHeader();
 }
 function renderIdle(){
+  // Vorlagen-Karten
+  const tl=document.getElementById("templateList");
+  tl.innerHTML = state.templates.map(t=>
+    '<div class="tplcard" onclick="startTraining(\''+t.id+'\')">'+
+    '<div><div class="n">'+esc(t.name)+'</div><div class="i">'+t.machines.length+' Geräte · '+
+    esc(t.machines.slice(0,3).join(", "))+(t.machines.length>3?" …":"")+'</div></div>'+
+    '<div class="go">▶</div></div>'
+  ).join("");
+  if(state.templates.length) tl.innerHTML += '<div class="seclbl" style="margin:14px 0 8px">oder</div>';
+
   const last = state.sessions[state.sessions.length-1];
   const prev = state.sessions[state.sessions.length-2];
   const box = document.getElementById("lastBox");
@@ -445,7 +644,7 @@ function renderIdle(){
   const lv=sVol(last), pv=prev?sVol(prev):0;
   const trend = pv>0 ? ((lv-pv)/pv*100) : null;
   box.innerHTML =
-    '<div class="seclbl">Letztes Training</div><div class="cards">'+
+    '<div class="seclbl">Letztes Training'+(last.templateName?' · '+esc(last.templateName):'')+'</div><div class="cards">'+
     '<div class="card"><div class="lbl">Datum</div><div class="val num">'+fmtShort(last.date)+'</div></div>'+
     '<div class="card"><div class="lbl">Volumen</div><div class="val num accent">'+fmtKg(lv)+' kg</div>'+
     (trend!==null?'<div class="sub2">'+(trend>=0?"+":"")+trend.toFixed(1)+' % vs. davor</div>':"")+'</div>'+
@@ -454,8 +653,14 @@ function renderIdle(){
 }
 function renderChips(){
   const el=document.getElementById("machineChips");
-  el.innerHTML = state.machines.map(m=>
-    '<div class="chip'+(m===selMachine?" sel":"")+'" onclick="pickMachine(\''+esc(m).replace(/'/g,"\\'")+'\')">'+esc(m)+'</div>'
+  const tpl = active && active.templateId ? tplById(active.templateId) : null;
+  const list = tpl ? tpl.machines.concat(state.machines.filter(m=>!tpl.machines.includes(m))) : state.machines;
+  const done = active ? active.doneMachines : [];
+  document.getElementById("machineSecLbl").textContent =
+    tpl ? "Gerät ("+done.filter(m=>tpl.machines.includes(m)).length+"/"+tpl.machines.length+" fertig)" : "Gerät";
+  el.innerHTML = list.map(m=>
+    '<div class="chip'+(m===selMachine?" sel":"")+(done.includes(m)&&m!==selMachine?" done":"")+
+    '" onclick="pickMachine(\''+escJs(esc(m))+'\')">'+(done.includes(m)?"✓ ":"")+esc(m)+'</div>'
   ).join("") + '<div class="chip" onclick="toggleAddMachine()">＋ Neu</div>';
 }
 function renderLive(){
@@ -475,6 +680,19 @@ function renderLive(){
       '<div class="progressbar"><div style="width:'+Math.min(100,vol/lastVol*100)+'%"></div></div>'+
       '<div class="pbarlbl">'+Math.min(999,Math.round(vol/lastVol*100))+' % vom letzten Training ('+fmtKg(lastVol)+' kg)</div>';
   } else { trendEl.innerHTML=""; document.getElementById("livePbar").innerHTML=""; }
+  // Pausentimer
+  const pb=document.getElementById("pauseBox");
+  if(active.pauseUntil){
+    const rest=Math.ceil((active.pauseUntil-Date.now())/1000);
+    if(rest<=0){
+      active.pauseUntil=null; saveActive();
+      pb.classList.add("hidden");
+      if(!pauseBeeped){ pauseBeeped=true; beep(); toast("Pause vorbei – weiter geht's!"); }
+    } else {
+      pb.classList.remove("hidden");
+      document.getElementById("pauseTime").textContent=fmtDur(rest);
+    }
+  } else pb.classList.add("hidden");
 }
 function renderSets(){
   if(!active) return;
@@ -502,6 +720,15 @@ function delSession(id, ev){
   toast("Training gelöscht");
 }
 function cancelDel(ev){ ev.stopPropagation(); confirmDeleteId=null; renderHistory(); }
+function sessionToTpl(id, ev){
+  ev.stopPropagation();
+  const s=state.sessions.find(x=>x.id===id); if(!s) return;
+  const machines=[...new Set(s.sets.map(x=>x.machine))];
+  const name="Training "+fmtShort(s.date);
+  state.templates.push({id:"t_"+Date.now(), name, machines});
+  save();
+  toast('Als Vorlage „'+name+'" gespeichert – Name unter „Mehr" änderbar');
+}
 function renderHistory(){
   const el=document.getElementById("historyList");
   if(!state.sessions.length){ el.innerHTML='<div class="center">Noch keine gespeicherten Trainings.</div>'; return; }
@@ -515,7 +742,8 @@ function renderHistory(){
         '<div class="mgroup">'+esc(m)+' <span>· '+fmtKg(sets.reduce((a,x)=>a+x.kg*x.reps,0))+' kg</span></div>'+
         sets.map(x=>'<div class="srow">'+fmtKg(x.kg)+' kg × '+x.reps+'</div>').join("")
       ).join("")+
-      '<div style="display:flex;gap:14px;align-items:center">'+
+      '<div style="display:flex;gap:14px;align-items:center;margin-top:14px;flex-wrap:wrap">'+
+      '<span class="actlink" onclick="sessionToTpl(\''+s.id+'\',event)">Als Vorlage speichern</span>'+
       '<span class="dellink" '+(confirmDeleteId===s.id?'style="font-weight:700;border:1px solid var(--bad);background:#FF6B6B18;padding:8px 12px;border-radius:10px"':'')+
       ' onclick="delSession(\''+s.id+'\',event)">'+
       (confirmDeleteId===s.id?"Wirklich löschen? Nochmal tippen":"Training löschen")+'</span>'+
@@ -523,7 +751,8 @@ function renderHistory(){
       '</div></div>';
     }
     return '<div class="sess"><div class="head" onclick="toggleExpand(\''+s.id+'\')">'+
-      '<div><div style="font-weight:700;font-size:15px">'+fmtDate(s.date)+'</div>'+
+      '<div><div style="font-weight:700;font-size:15px">'+fmtDate(s.date)+
+      (s.templateName?' <span style="color:var(--accent);font-size:12px">· '+esc(s.templateName)+'</span>':'')+'</div>'+
       '<div style="color:var(--dim);font-size:13px">'+fmtDur(s.durationSec)+' · '+s.sets.length+' Sätze</div></div>'+
       '<div class="vol num">'+fmtKg(vol)+' kg</div></div>'+detail+'</div>';
   }).join("");
@@ -531,7 +760,6 @@ function renderHistory(){
 
 // ================= Rendering: Fortschritt =================
 function lineChart(data, series, height){
-  // data: [{name, key1, key2...}], series: [{key,color}]
   const W=440, H=height||190, padL=44, padR=12, padT=12, padB=24;
   if(!data.length) return "";
   let max=0;
@@ -541,14 +769,12 @@ function lineChart(data, series, height){
   const x=i => n===1 ? (padL+(W-padL-padR)/2) : padL+(W-padL-padR)*i/(n-1);
   const y=v => padT+(H-padT-padB)*(1-v/max);
   let out='<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">';
-  // Gitter + Y-Achse
   for(let g=0; g<=3; g++){
     const v=max*g/3, yy=y(v);
     out+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="#343945" stroke-dasharray="3 3"/>';
     out+='<text x="'+(padL-6)+'" y="'+(yy+3)+'" fill="#9BA1AD" font-size="10" text-anchor="end">'+
       (v>=1000?(v/1000).toFixed(1).replace(".",",")+"k":Math.round(v))+'</text>';
   }
-  // X-Beschriftung (max ~8 Labels)
   const step=Math.max(1,Math.ceil(n/8));
   for(let i=0;i<n;i+=step){
     out+='<text x="'+x(i)+'" y="'+(H-6)+'" fill="#9BA1AD" font-size="10" text-anchor="middle">'+esc(data[i].name)+'</text>';
@@ -625,7 +851,7 @@ function renderStats(){
   html+='<div class="seclbl">Steigerung pro Gerät (Max-Gewicht, erstes → letztes Training)</div><div class="chips">';
   for(const m of Object.keys(mstats)){
     const p=machineProgress(mstats[m]);
-    html+='<div class="chip'+(analysisMachine===m?" sel":"")+'" onclick="pickAnalysis(\''+esc(m).replace(/'/g,"\\'")+'\')">'+esc(m)+
+    html+='<div class="chip'+(analysisMachine===m?" sel":"")+'" onclick="pickAnalysis(\''+escJs(esc(m))+'\')">'+esc(m)+
       (p!==null?'<small class="'+(p>=0?"up":"down")+'">'+(p>=0?"+":"")+p.toFixed(0)+' %</small>':"")+'</div>';
   }
   html+='</div>';
@@ -650,15 +876,104 @@ function renderStats(){
   el.innerHTML=html;
 }
 
-// ================= Export / Import =================
+// ================= Mehr: Vorlagen =================
+function renderMehr(){
+  renderTplList(); renderSettings(); renderDataStats(); renderVersions();
+}
+function renderTplList(){
+  const el=document.getElementById("tplList");
+  if(!state.templates.length){
+    el.innerHTML='<div class="note" style="margin-bottom:10px">Noch keine Vorlagen. Leg dir z. B. „Full Body" mit deinen Geräten an – dann startest du das Training künftig mit einem Tipp.</div>';
+    return;
+  }
+  el.innerHTML=state.templates.map(t=>
+    '<div class="settingrow"><div>'+
+    '<div class="sl">'+esc(t.name)+'</div>'+
+    '<div class="sd">'+t.machines.length+' Geräte: '+esc(t.machines.join(", "))+'</div></div>'+
+    '<div style="display:flex;gap:12px;align-items:center">'+
+    '<span class="actlink" onclick="openTplEditor(\''+t.id+'\')">Bearbeiten</span>'+
+    '<span class="dellink" onclick="delTpl(\''+t.id+'\')">'+
+    (confirmTplDelete===t.id?"Sicher?":"Löschen")+'</span></div></div>'
+  ).join("");
+}
+function delTpl(id){
+  if(confirmTplDelete!==id){ confirmTplDelete=id; renderTplList();
+    setTimeout(()=>{ if(confirmTplDelete===id){ confirmTplDelete=null; renderTplList(); } }, 3000);
+    return;
+  }
+  state.templates=state.templates.filter(t=>t.id!==id);
+  confirmTplDelete=null; save(); renderTplList(); renderIdle();
+  toast("Vorlage gelöscht");
+}
+function openTplEditor(id){
+  editingTplId=id;
+  const t=id?tplById(id):null;
+  tplSelMachines = t ? t.machines.slice() : [];
+  document.getElementById("tplName").value = t ? t.name : "";
+  document.getElementById("tplEditor").classList.remove("hidden");
+  renderTplMachineChips();
+}
+function closeTplEditor(){
+  document.getElementById("tplEditor").classList.add("hidden");
+  editingTplId=null; tplSelMachines=[];
+}
+function tplToggleMachine(m){
+  const i=tplSelMachines.indexOf(m);
+  if(i>=0) tplSelMachines.splice(i,1); else tplSelMachines.push(m);
+  renderTplMachineChips();
+}
+function renderTplMachineChips(){
+  const el=document.getElementById("tplMachineChips");
+  el.innerHTML=state.machines.map(m=>{
+    const idx=tplSelMachines.indexOf(m);
+    return '<div class="chip'+(idx>=0?" sel":"")+'" onclick="tplToggleMachine(\''+escJs(esc(m))+'\')">'+
+      (idx>=0?(idx+1)+". ":"")+esc(m)+'</div>';
+  }).join("");
+}
+function saveTpl(){
+  const name=document.getElementById("tplName").value.trim();
+  if(!name){ toast("Bitte einen Namen eingeben"); return; }
+  if(!tplSelMachines.length){ toast("Mindestens ein Gerät antippen"); return; }
+  if(editingTplId){
+    const t=tplById(editingTplId);
+    if(t){ t.name=name; t.machines=tplSelMachines.slice(); }
+  } else {
+    state.templates.push({id:"t_"+Date.now(), name, machines:tplSelMachines.slice()});
+  }
+  save(); closeTplEditor(); renderTplList(); renderIdle();
+  toast('Vorlage „'+name+'" gespeichert');
+}
+
+// ================= Mehr: Einstellungen =================
+function renderSettings(){
+  document.getElementById("pauseSetInput").value = fmtDur(state.settings.pauseSec);
+  document.getElementById("defKgInput").value = state.settings.defaultKg;
+  document.getElementById("defRepsInput").value = state.settings.defaultReps;
+}
+function setPause(d){
+  state.settings.pauseSec = Math.max(15, Math.min(600, state.settings.pauseSec + d));
+  save(); renderSettings();
+}
+function setDef(key, d){
+  const min = key==="defaultReps"?1:0;
+  state.settings[key] = Math.max(min, +((state.settings[key]+d)).toFixed(2));
+  save(); renderSettings();
+}
+function defChanged(){
+  const kg=Number(document.getElementById("defKgInput").value);
+  const reps=Number(document.getElementById("defRepsInput").value);
+  if(isFinite(kg)&&kg>=0) state.settings.defaultKg=kg;
+  if(isFinite(reps)&&reps>=1) state.settings.defaultReps=Math.round(reps);
+  save(); renderSettings();
+}
+
+// ================= Mehr: Backup / Versionen =================
 function backupName(){
-  const d=new Date();
-  return "volumentracker-backup-"+d.toISOString().slice(0,10)+".json";
+  return "volumentracker-backup-"+new Date().toISOString().slice(0,10)+".json";
 }
 async function exportData(){
-  const payload=JSON.stringify({app:"volumentracker",version:1,exportedAt:new Date().toISOString(),...state},null,2);
+  const payload=JSON.stringify({app:"volumentracker",version:VERSION,exportedAt:new Date().toISOString(),...state},null,2);
   const file=new File([payload], backupName(), {type:"application/json"});
-  // Bevorzugt: iOS-Teilen-Menü → "In Dateien sichern" → iCloud Drive
   if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
     try {
       await navigator.share({files:[file], title:"Volumentracker Backup"});
@@ -666,7 +981,6 @@ async function exportData(){
       return;
     } catch(e){ if(e.name==="AbortError") return; }
   }
-  // Fallback: normaler Download
   const url=URL.createObjectURL(new Blob([payload],{type:"application/json"}));
   const a=document.createElement("a");
   a.href=url; a.download=backupName();
@@ -683,24 +997,30 @@ function importData(ev){
     try {
       const d=JSON.parse(reader.result);
       if(!d || !Array.isArray(d.sessions)) throw new Error("Format");
-      if(!confirm("Backup vom "+(d.exportedAt?new Date(d.exportedAt).toLocaleDateString("de-DE"):"?")+
-        " mit "+d.sessions.length+" Trainings importieren?\n\nDie aktuellen Daten werden ersetzt.")) return;
-      state={
+      let ok=true;
+      try {
+        ok=confirm("Backup vom "+(d.exportedAt?new Date(d.exportedAt).toLocaleDateString("de-DE"):"?")+
+          " mit "+d.sessions.length+" Trainings importieren?\n\nDie aktuellen Daten werden ersetzt.");
+      } catch(e){}
+      if(!ok) return;
+      state = migrate({
         machines: Array.isArray(d.machines)&&d.machines.length ? d.machines : DEFAULT_MACHINES.slice(),
-        sessions: d.sessions
-      };
+        sessions: d.sessions,
+        templates: d.templates,
+        settings: d.settings
+      });
       state.sessions.sort((a,b)=>new Date(a.date)-new Date(b.date));
       selMachine=state.machines[0];
       save();
-      renderHeader(); renderIdle(); renderDataTab();
+      renderHeader(); renderIdle(); renderMehr();
       toast("Import erfolgreich: "+state.sessions.length+" Trainings");
     } catch(e){
-      alert("Import fehlgeschlagen: Die Datei ist kein gültiges Volumentracker-Backup.");
+      toast("Import fehlgeschlagen: kein gültiges Backup");
     }
   };
   reader.readAsText(file);
 }
-function renderDataTab(){
+function renderDataStats(){
   const total=state.sessions.reduce((a,s)=>a+sVol(s),0);
   const sets=state.sessions.reduce((a,s)=>a+s.sets.length,0);
   document.getElementById("dataStats").innerHTML=
@@ -708,16 +1028,20 @@ function renderDataTab(){
     '<div class="card"><div class="lbl">Sätze</div><div class="val num">'+sets+'</div></div>'+
     '<div class="card"><div class="lbl">Gesamt</div><div class="val num accent">'+fmtKg(total)+' kg</div></div>';
 }
+function renderVersions(){
+  document.getElementById("versionList").innerHTML =
+    '<div style="margin-bottom:8px"><b>Aktuelle Version: '+VERSION+'</b></div>'+
+    CHANGELOG.map(c=>'<div class="verrow"><span class="v">'+c.v+'</span><span><b>'+c.d+'</b><br><span class="d2">'+c.t+'</span></span></div>').join("");
+}
 
 // ================= Start =================
 load();
 renderTraining();
 if (TEST_MODE) {
-  const sub = document.getElementById("headSub");
   const hint = document.createElement("div");
   hint.style.cssText = "color:#FF6B2C;font-size:12px;font-weight:700;margin-top:4px";
   hint.textContent = "⚠ Testmodus – Daten werden nicht dauerhaft gespeichert";
-  sub.after(hint);
+  document.getElementById("headSub").after(hint);
 }
 </script>
 </body>
