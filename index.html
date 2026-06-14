@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Volumentracker</title>
+<title>Hantelheld</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Volumen">
+<meta name="apple-mobile-web-app-title" content="Hantelheld">
 <meta name="theme-color" content="#15171C">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -200,6 +200,29 @@
   .verrow:last-child { border-bottom: none; }
   .verrow .v { font-weight: 700; color: var(--accent); min-width: 40px; }
   .verrow .d2 { color: var(--dim); }
+  .cal { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .cal .cgrid { display: grid; grid-template-columns: repeat(7,1fr); gap: 6px; }
+  .cal .cdow { text-align: center; font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; }
+  .cal .cday { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 8px; }
+  .cal .cday .dn { font-size: 11px; color: var(--dim); }
+  .cal .cday.today { background: var(--panel-soft); }
+  .cal .cday .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--line); }
+  .cal .cday .dot.on { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .cal .cmonth { text-align: center; font-weight: 700; font-size: 15px; }
+  .cal .cnav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .cal .cnav button {
+    width: 40px; height: 36px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel-soft); color: var(--text); font-size: 22px; line-height: 1;
+    cursor: pointer; font-family: inherit;
+  }
+  .ordrow { display: flex; align-items: center; gap: 10px; background: var(--panel-soft);
+    border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 6px; }
+  .ordrow .ordn { color: var(--accent); font-weight: 700; min-width: 22px; }
+  .ordrow .ordm { flex: 1; font-size: 14px; font-weight: 600; }
+  .ordrow .ordbtns { display: flex; gap: 6px; }
+  .ordrow .ordbtns button { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font-size: 14px; cursor: pointer; }
+  .ordrow .ordbtns button:disabled { opacity: .3; }
   .toast {
     position: fixed; left: 50%; transform: translateX(-50%);
     bottom: calc(90px + env(safe-area-inset-bottom));
@@ -214,7 +237,7 @@
 <body>
 
 <header>
-  <h1>Volumen<span>tracker</span></h1>
+  <h1>Hantel<span>held</span></h1>
   <div class="sub" id="headSub"></div>
 </header>
 
@@ -244,20 +267,20 @@
         <div id="livePbar"></div>
       </div>
 
-      <div id="pauseBox" class="pause hidden">
-        <div class="lbl2">Pause</div>
-        <div class="t num" id="pauseTime">1:00</div>
-        <div class="btns">
-          <button onclick="pausePlus(30)">+30 s</button>
-          <button onclick="endPause()">Überspringen</button>
-        </div>
-      </div>
-
       <div class="seclbl" id="machineSecLbl">Gerät</div>
       <div class="chips" id="machineChips"></div>
       <div class="row hidden" id="addMachineRow" style="margin-top:8px">
         <input class="txt" id="newMachineInput" placeholder="Gerätename">
         <button class="okbtn" onclick="addMachine()">OK</button>
+      </div>
+      <div id="machineEditor" class="hidden" style="margin-top:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px">
+        <div class="seclbl" id="meditTitle" style="margin:0 0 8px">Gerät bearbeiten</div>
+        <input class="txt" id="meditName" placeholder="Gerätename">
+        <div class="row" style="margin-top:12px">
+          <button class="iobtn" onclick="closeMachineEditor()">Abbrechen</button>
+          <button class="okbtn" style="flex:1;padding:14px 0" onclick="saveMachineRename()">Umbenennen</button>
+        </div>
+        <div class="dellink" style="margin-top:12px;text-align:center;width:100%" onclick="deleteMachine()">Gerät aus Liste entfernen</div>
       </div>
       <div class="lastinfo" id="lastInfo"></div>
 
@@ -281,7 +304,7 @@
       </div>
 
       <button class="bigbtn outline" style="margin-top:16px" onclick="addSet()" id="addSetBtn">＋ Satz eintragen</button>
-      <button class="bigbtn" style="margin-top:10px" onclick="finishMachine()" id="finishMachineBtn">✓ Gerät abschließen → Pause</button>
+      <button class="bigbtn" style="margin-top:10px" onclick="finishMachine()" id="finishMachineBtn">✓ Gerät abschließen</button>
       <div id="setList" style="margin-top:16px"></div>
       <button class="bigbtn dark" style="margin-top:12px" onclick="finishTraining()" id="finishBtn">■ Training beenden &amp; speichern</button>
       <div id="discardCancel" class="center hidden" style="cursor:pointer;font-size:13px" onclick="cancelDiscard()">Abbrechen, Training läuft weiter</div>
@@ -308,8 +331,9 @@
     <div id="tplEditor" class="hidden" style="margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px">
       <div class="seclbl" style="margin:0 0 8px">Name der Vorlage</div>
       <input class="txt" id="tplName" placeholder="z. B. Full Body">
-      <div class="seclbl">Geräte in Reihenfolge antippen</div>
+      <div class="seclbl">Geräte antippen (Reihenfolge unten anpassbar)</div>
       <div class="chips" id="tplMachineChips"></div>
+      <div id="tplOrderList"></div>
       <div class="row" style="margin-top:14px">
         <button class="iobtn" onclick="closeTplEditor()">Abbrechen</button>
         <button class="okbtn" style="flex:1;padding:14px 0" onclick="saveTpl()">Vorlage speichern</button>
@@ -317,17 +341,6 @@
     </div>
 
     <div class="seclbl">Einstellungen</div>
-    <div class="settingrow">
-      <div>
-        <div class="sl">Pausendauer</div>
-        <div class="sd">Timer nach „Gerät abschließen"</div>
-      </div>
-      <div class="stepper">
-        <button onclick="setPause(-15)">−</button>
-        <input id="pauseSetInput" readonly value="1:00" style="width:80px">
-        <button onclick="setPause(15)">+</button>
-      </div>
-    </div>
     <div class="settingrow">
       <div>
         <div class="sl">Standard-Gewicht</div>
@@ -351,21 +364,31 @@
       </div>
     </div>
 
+    <div class="settingrow" style="flex-direction:column;align-items:stretch">
+      <div>
+        <div class="sl">Akzentfarbe</div>
+        <div class="sd">Färbt Buttons, Werte und Diagramme</div>
+      </div>
+      <div class="chips" id="accentChips" style="margin-top:10px"></div>
+    </div>
+
     <div class="seclbl">Backup &amp; Wiederherstellung</div>
     <div class="row">
-      <button class="iobtn" onclick="exportData()">⬆ Exportieren</button>
+      <button class="iobtn" onclick="exportData()">⬆ Backup (JSON)</button>
       <button class="iobtn" onclick="document.getElementById('importFile').click()">⬇ Importieren</button>
     </div>
+    <button class="iobtn" style="width:100%;margin-top:8px" onclick="exportCsv()">📊 CSV-Export (Excel/Tabelle)</button>
     <input type="file" id="importFile" accept=".json,application/json" class="hidden" onchange="importData(event)">
     <div class="note">
-      <b>Export:</b> Teilen-Menü → „In Dateien sichern" → iCloud Drive → dein Ordner.<br>
-      <b>Import:</b> Backup-Datei aus iCloud auswählen – ersetzt die aktuellen Daten.
+      <b>Backup (JSON):</b> Vollständige Sicherung zum Wiederherstellen – Teilen-Menü → „In Dateien sichern" → iCloud Drive.<br>
+      <b>CSV-Export:</b> Tabelle mit Datum, Reps und Volumen pro Satz – zum Öffnen in Excel/Numbers.<br>
+      <b>Import:</b> JSON-Backup aus iCloud auswählen – ersetzt die aktuellen Daten.
     </div>
     <div class="cards" id="dataStats" style="margin-top:10px"></div>
 
     <div class="seclbl">Impressum</div>
     <div class="imptext">
-      <b>Volumentracker</b> – private, nicht-kommerzielle Trainings-App.<br>
+      <b>Hantelheld</b> – private, nicht-kommerzielle Trainings-App.<br>
       Erstellt von Jan (Osnabrück) mit Unterstützung von Claude (Anthropic).<br><br>
       <b>Datenschutz:</b> Diese App verwendet keine Server, keine Cookies und kein Tracking.
       Sämtliche Trainingsdaten werden ausschließlich lokal auf deinem Gerät gespeichert
@@ -391,8 +414,12 @@
 <script>
 "use strict";
 // ================= Version =================
-const VERSION = "1.1";
+const VERSION = "1.5";
 const CHANGELOG = [
+  { v: "1.5", d: "14.06.2026", t: "Wochen-Streak und Wochen-/Monatsvolumen in den Statistiken. Geräte im Training per langem Drücken umbenennen oder entfernen. Geräte-Reihenfolge in Vorlagen mit Pfeilen sortieren. Akzentfarbe wählbar." },
+  { v: "1.4", d: "14.06.2026", t: "Gerät abschließen springt jetzt immer zum nächsten offenen Gerät weiter – auch im freien Training und am Ende einer Vorlage." },
+  { v: "1.3", d: "14.06.2026", t: "Trainingskalender: Monat per Pfeil vor- und zurückblättern, Sprung zurück zum aktuellen Monat über den heute-Link." },
+  { v: "1.2", d: "14.06.2026", t: "Umbenannt in Hantelheld. Pausentimer entfernt (Gerät abschließen bleibt). CSV-Export (Datum, Reps, Volumen). Trainings-Uhrzeit wird erfasst und angezeigt. Trainingskalender des aktuellen Monats in den Statistiken. Grüner/roter Pfeil pro Satz im Vergleich zum vorherigen Satz." },
   { v: "1.1", d: "10.06.2026", t: "Gespeicherte Trainings nachträglich bearbeiten: Sätze ändern, löschen und ergänzen, Datum und Dauer anpassen." },
   { v: "1.0", d: "10.06.2026", t: "Trainingsvorlagen (z. B. Full Body), Pausentimer nach Gerät-Abschluss, Einstellungen (Pausendauer, Standardwerte), Anzeige der letzten Werte pro Gerät, Impressum & Versionsübersicht." },
   { v: "0.9", d: "10.06.2026", t: "Erste Version: Training mit Timer, Volumen-Tracking, Verlauf, Fortschritts-Auswertungen, Export/Import über iCloud Drive." },
@@ -401,14 +428,27 @@ const CHANGELOG = [
 // ================= Daten =================
 const DEFAULT_MACHINES = ["Beinpresse","Latzug","Rudern","Brustpresse","Schulterdrücken","Bauchmaschine","Beinbeuger"];
 const LS_DATA = "vt-data", LS_ACTIVE = "vt-active";
-const DEFAULT_SETTINGS = { pauseSec: 60, defaultKg: 40, defaultReps: 12 };
+const DEFAULT_SETTINGS = { defaultKg: 40, defaultReps: 12, accent: "#FF6B2C" };
+const ACCENT_COLORS = [
+  { name: "Orange", c: "#FF6B2C" },
+  { name: "Werder-Grün", c: "#1D9A6C" },
+  { name: "Blau", c: "#3B82F6" },
+  { name: "Rot", c: "#EF4444" },
+  { name: "Violett", c: "#A855F7" },
+  { name: "Gold", c: "#EAB308" },
+];
+function applyAccent(){
+  const c = (state.settings && state.settings.accent) || "#FF6B2C";
+  document.documentElement.style.setProperty("--accent", c);
+}
 
 let state = { machines: DEFAULT_MACHINES.slice(), sessions: [], templates: [], settings: {...DEFAULT_SETTINGS} };
-let active = null; // { start, sets, templateId, doneMachines:[], pauseUntil }
+let active = null; // { start, sets, templateId, doneMachines:[] }
 let selMachine = DEFAULT_MACHINES[0];
 let confirmDeleteId = null, confirmDiscard = false, expandedId = null, analysisMachine = null;
 let confirmTplDelete = null, editingTplId = null, tplSelMachines = [];
-let timerInt = null, audioCtx = null, pauseBeeped = false;
+let selMachineEdit = null;
+let timerInt = null;
 
 // --- Speicher-Wrapper: localStorage, mit In-Memory-Fallback für Testumgebungen ---
 let _mem = {}, TEST_MODE = false;
@@ -421,10 +461,21 @@ const store = {
 };
 
 function migrate(d){
-  // Daten aus v0.9 (ohne templates/settings) bleiben voll kompatibel
+  // Daten aus früheren Versionen bleiben voll kompatibel
   if(!Array.isArray(d.templates)) d.templates = [];
   if(!d.settings) d.settings = {...DEFAULT_SETTINGS};
   d.settings = {...DEFAULT_SETTINGS, ...d.settings};
+  // Trainings vor v1.2 hatten keine erfasste Uhrzeit → auf 09:00 Uhr setzen
+  if(Array.isArray(d.sessions)){
+    for(const s of d.sessions){
+      if(!s.hasTime){
+        const dt = new Date(s.date);
+        dt.setHours(9,0,0,0);
+        s.date = dt.toISOString();
+        s.hasTime = true;
+      }
+    }
+  }
   return d;
 }
 function load() {
@@ -444,6 +495,7 @@ function saveActive() {
 const fmtKg = n => new Intl.NumberFormat("de-DE",{maximumFractionDigits:1}).format(n);
 const fmtDate = iso => new Date(iso).toLocaleDateString("de-DE",{weekday:"short",day:"2-digit",month:"2-digit",year:"2-digit"});
 const fmtShort = iso => new Date(iso).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
+const fmtTime = iso => new Date(iso).toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
 function fmtDur(sec){
   sec=Math.max(0,Math.floor(sec));
   const h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), s=sec%60;
@@ -463,18 +515,6 @@ function lastValues(){
   return map;
 }
 function tplById(id){ return state.templates.find(t=>t.id===id) || null; }
-function beep(){
-  try {
-    if(!audioCtx) return;
-    const t0=audioCtx.currentTime;
-    for(const [off,f] of [[0,880],[0.18,880],[0.36,1175]]){
-      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
-      o.frequency.value=f; o.connect(g); g.connect(audioCtx.destination);
-      g.gain.setValueAtTime(0.25, t0+off); g.gain.exponentialRampToValueAtTime(0.001, t0+off+0.15);
-      o.start(t0+off); o.stop(t0+off+0.16);
-    }
-  } catch(e){}
-}
 
 // ================= Tabs =================
 function showTab(t){
@@ -520,6 +560,7 @@ function updateAddBtn(){
   document.getElementById("addSetBtn").textContent = "＋ Satz eintragen ("+fmtKg(kg*reps)+" kg)";
 }
 function pickMachine(m){
+  if(lpFired){ lpFired=false; return; } // Long-Press hat schon den Editor geöffnet
   selMachine = m;
   renderChips(); applyLastValues(m);
 }
@@ -544,31 +585,25 @@ function removeSet(i){
   active.sets.splice(i,1);
   saveActive(); renderLive(); renderSets();
 }
-// --- Gerät abschließen + Pausentimer ---
+// --- Gerät abschließen ---
 function finishMachine(){
   if(!active || !selMachine) return;
   if(!active.doneMachines.includes(selMachine)) active.doneMachines.push(selMachine);
-  // Audio beim Nutzer-Tippen freischalten (für den Piepton am Pausenende)
-  try { audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
-        if(audioCtx.state==="suspended") audioCtx.resume(); } catch(e){}
-  active.pauseUntil = Date.now() + state.settings.pauseSec*1000;
-  pauseBeeped = false;
-  // Nächstes offenes Gerät der Vorlage vorwählen
+  // Reihenfolge bestimmen: bei Vorlage deren Geräte zuerst, sonst die allgemeine Liste
   const tpl = active.templateId ? tplById(active.templateId) : null;
-  if(tpl){
-    const next = tpl.machines.find(m=>!active.doneMachines.includes(m));
-    if(next) selMachine = next;
+  const order = tpl
+    ? tpl.machines.concat(state.machines.filter(m=>!tpl.machines.includes(m)))
+    : state.machines;
+  // Nächstes noch nicht abgeschlossenes Gerät suchen – ab der aktuellen Position weiter
+  const startIdx = order.indexOf(selMachine);
+  let next = null;
+  for(let i=1; i<=order.length; i++){
+    const cand = order[(startIdx + i) % order.length];
+    if(cand && !active.doneMachines.includes(cand)){ next = cand; break; }
   }
+  if(next) selMachine = next; // sonst (alles abgeschlossen) beim aktuellen bleiben
   saveActive(); renderChips(); applyLastValues(selMachine); renderLive();
-  toast(state.settings.pauseSec >= 60 ? "Pause läuft – gut gemacht 💪" : "Pause läuft");
-}
-function pausePlus(sec){
-  if(!active || !active.pauseUntil) return;
-  active.pauseUntil += sec*1000; saveActive(); renderLive();
-}
-function endPause(){
-  if(!active) return;
-  active.pauseUntil = null; saveActive(); renderLive();
+  toast(next ? "Weiter mit: "+next : "Alle Geräte abgeschlossen 💪");
 }
 function finishTraining(){
   if(!active) return;
@@ -588,6 +623,7 @@ function finishTraining(){
   state.sessions.push({
     id:"s_"+end,
     date:new Date(active.start).toISOString(),
+    hasTime:true,
     durationSec:Math.round((end-active.start)/1000),
     sets:active.sets,
     templateName: tpl ? tpl.name : null
@@ -616,8 +652,7 @@ function renderTraining(){
   if(active){
     const tpl = active.templateId ? tplById(active.templateId) : null;
     document.getElementById("liveTitle").textContent = tpl ? tpl.name+" – Gesamtgewicht" : "Gesamtgewicht heute";
-    document.getElementById("finishMachineBtn").textContent =
-      "✓ Gerät abschließen → Pause "+fmtDur(state.settings.pauseSec);
+    document.getElementById("finishMachineBtn").textContent = "✓ Gerät abschließen";
     renderChips(); renderLive(); renderSets(); updateAddBtn(); renderLastInfo();
     if(!timerInt) timerInt=setInterval(renderLive,1000);
   } else {
@@ -658,11 +693,67 @@ function renderChips(){
   const list = tpl ? tpl.machines.concat(state.machines.filter(m=>!tpl.machines.includes(m))) : state.machines;
   const done = active ? active.doneMachines : [];
   document.getElementById("machineSecLbl").textContent =
-    tpl ? "Gerät ("+done.filter(m=>tpl.machines.includes(m)).length+"/"+tpl.machines.length+" fertig)" : "Gerät";
+    tpl ? "Gerät ("+done.filter(m=>tpl.machines.includes(m)).length+"/"+tpl.machines.length+" fertig) · lang drücken zum Bearbeiten" : "Gerät · lang drücken zum Bearbeiten";
   el.innerHTML = list.map(m=>
     '<div class="chip'+(m===selMachine?" sel":"")+(done.includes(m)&&m!==selMachine?" done":"")+
-    '" onclick="pickMachine(\''+escJs(esc(m))+'\')">'+(done.includes(m)?"✓ ":"")+esc(m)+'</div>'
+    '" data-machine="'+esc(m)+'" onclick="pickMachine(\''+escJs(esc(m))+'\')">'+(done.includes(m)?"✓ ":"")+esc(m)+'</div>'
   ).join("") + '<div class="chip" onclick="toggleAddMachine()">＋ Neu</div>';
+  attachLongPress(el);
+}
+// Long-Press auf Geräte-Chips → Umbenennen/Löschen
+let lpTimer=null, lpFired=false;
+function attachLongPress(container){
+  container.querySelectorAll(".chip[data-machine]").forEach(chip=>{
+    const m=chip.getAttribute("data-machine");
+    const start=()=>{ lpFired=false; lpTimer=setTimeout(()=>{ lpFired=true; openMachineEditor(m); }, 550); };
+    const cancel=()=>{ clearTimeout(lpTimer); };
+    chip.addEventListener("touchstart", start, {passive:true});
+    chip.addEventListener("touchend", cancel);
+    chip.addEventListener("touchmove", cancel, {passive:true});
+    chip.addEventListener("mousedown", start);
+    chip.addEventListener("mouseup", cancel);
+    chip.addEventListener("mouseleave", cancel);
+  });
+}
+function openMachineEditor(m){
+  // Klick unterdrücken, der nach Long-Press feuern würde
+  selMachineEdit=m;
+  document.getElementById("meditName").value=m;
+  document.getElementById("meditTitle").textContent='Gerät „'+m+'"';
+  document.getElementById("machineEditor").classList.remove("hidden");
+}
+function closeMachineEditor(){
+  document.getElementById("machineEditor").classList.add("hidden");
+  selMachineEdit=null;
+}
+function saveMachineRename(){
+  const oldName=selMachineEdit;
+  const newName=document.getElementById("meditName").value.trim();
+  if(!oldName||!newName){ closeMachineEditor(); return; }
+  if(newName===oldName){ closeMachineEditor(); return; }
+  if(state.machines.includes(newName)){ toast("Gibt es schon"); return; }
+  // Überall ersetzen: Liste, Vorlagen, alle Sätze in Sessions, aktives Training
+  state.machines=state.machines.map(x=>x===oldName?newName:x);
+  for(const t of state.templates) t.machines=t.machines.map(x=>x===oldName?newName:x);
+  for(const s of state.sessions) for(const x of s.sets) if(x.machine===oldName) x.machine=newName;
+  if(active){ for(const x of active.sets) if(x.machine===oldName) x.machine=newName;
+    active.doneMachines=active.doneMachines.map(x=>x===oldName?newName:x); }
+  if(selMachine===oldName) selMachine=newName;
+  save(); saveActive(); closeMachineEditor();
+  renderChips(); renderLastInfo();
+  toast('Umbenannt in „'+newName+'"');
+}
+function deleteMachine(){
+  const m=selMachineEdit;
+  if(!m){ closeMachineEditor(); return; }
+  if(state.machines.length<=1){ toast("Mindestens ein Gerät nötig"); return; }
+  // Nur aus der Geräteliste + Vorlagen entfernen; vergangene Trainings bleiben unangetastet
+  state.machines=state.machines.filter(x=>x!==m);
+  for(const t of state.templates) t.machines=t.machines.filter(x=>x!==m);
+  if(selMachine===m) selMachine=state.machines[0];
+  save(); closeMachineEditor();
+  renderChips(); applyLastValues(selMachine);
+  toast("Gerät aus Liste entfernt");
 }
 function renderLive(){
   if(!active) return;
@@ -681,26 +772,35 @@ function renderLive(){
       '<div class="progressbar"><div style="width:'+Math.min(100,vol/lastVol*100)+'%"></div></div>'+
       '<div class="pbarlbl">'+Math.min(999,Math.round(vol/lastVol*100))+' % vom letzten Training ('+fmtKg(lastVol)+' kg)</div>';
   } else { trendEl.innerHTML=""; document.getElementById("livePbar").innerHTML=""; }
-  // Pausentimer
-  const pb=document.getElementById("pauseBox");
-  if(active.pauseUntil){
-    const rest=Math.ceil((active.pauseUntil-Date.now())/1000);
-    if(rest<=0){
-      active.pauseUntil=null; saveActive();
-      pb.classList.add("hidden");
-      if(!pauseBeeped){ pauseBeeped=true; beep(); toast("Pause vorbei – weiter geht's!"); }
-    } else {
-      pb.classList.remove("hidden");
-      document.getElementById("pauseTime").textContent=fmtDur(rest);
-    }
-  } else pb.classList.add("hidden");
 }
 function renderSets(){
   if(!active) return;
   const el=document.getElementById("setList");
-  el.innerHTML=[...active.sets].map((s,i)=>({s,i})).reverse().map(o=>
+  // Referenzwerte: letzte Werte pro Gerät aus der Historie (vor diesem Training)
+  const histRef={};
+  for(const sess of state.sessions) for(const x of sess.sets) histRef[x.machine]={kg:x.kg, reps:x.reps};
+  // Pro Gerät die Sätze durchnummerieren, um Satz-für-Satz zu vergleichen
+  const seenPerMachine={};
+  const rows=active.sets.map((s,i)=>{
+    const vol=s.kg*s.reps;
+    // Vergleichswert: vorheriger Satz dieses Geräts in dieser Session, sonst Historie
+    const prevList=seenPerMachine[s.machine]||[];
+    let refVol=null;
+    if(prevList.length){ const p=prevList[prevList.length-1]; refVol=p.kg*p.reps; }
+    else if(histRef[s.machine]){ refVol=histRef[s.machine].kg*histRef[s.machine].reps; }
+    prevList.push(s); seenPerMachine[s.machine]=prevList;
+    let arrow="";
+    if(refVol!==null && vol!==refVol){
+      const up=vol>refVol;
+      arrow=' <span style="color:'+(up?"var(--good)":"var(--bad)")+';font-weight:700">'+(up?"▲":"▼")+'</span>';
+    } else if(refVol!==null && vol===refVol){
+      arrow=' <span style="color:var(--dim)">＝</span>';
+    }
+    return {s,i,vol,arrow};
+  });
+  el.innerHTML=rows.reverse().map(o=>
     '<div class="setrow"><div><div class="m">'+esc(o.s.machine)+'</div>'+
-    '<div class="d">'+fmtKg(o.s.kg)+' kg × '+o.s.reps+' = <b>'+fmtKg(o.s.kg*o.s.reps)+' kg</b></div></div>'+
+    '<div class="d">'+fmtKg(o.s.kg)+' kg × '+o.s.reps+' = <b>'+fmtKg(o.vol)+' kg</b>'+o.arrow+'</div></div>'+
     '<div class="x" onclick="removeSet('+o.i+')">✕</div></div>'
   ).join("");
 }
@@ -775,7 +875,12 @@ function editMeta(key, val, ev){
   if(key==="date" && val){
     const old=new Date(editDraft.date);
     const [y,mo,d]=val.split("-").map(Number);
-    if(y&&mo&&d){ old.setFullYear(y,mo-1,d); editDraft.date=old.toISOString(); }
+    if(y&&mo&&d){ old.setFullYear(y,mo-1,d); editDraft.date=old.toISOString(); editDraft.hasTime=true; }
+  }
+  if(key==="time" && val){
+    const old=new Date(editDraft.date);
+    const [h,mi]=val.split(":").map(Number);
+    if(isFinite(h)&&isFinite(mi)){ old.setHours(h,mi,0,0); editDraft.date=old.toISOString(); editDraft.hasTime=true; }
   }
 }
 function saveEditSession(ev){
@@ -807,14 +912,18 @@ function renderHistory(){
     let detail="";
     if(open && editing && editDraft){
       const dateVal = editDraft.date.slice(0,10);
+      const timeVal = fmtTime(editDraft.date);
       const durMin = Math.round(editDraft.durationSec/60);
       const mOpts = m => state.machines.map(x=>'<option'+(x===m?" selected":"")+'>'+esc(x)+'</option>').join("");
       detail='<div class="detail" onclick="event.stopPropagation()">'+
-        '<div class="seclbl" style="margin-top:12px">Datum &amp; Dauer</div>'+
+        '<div class="seclbl" style="margin-top:12px">Datum, Uhrzeit &amp; Dauer</div>'+
         '<div class="row">'+
         '<input class="txt" type="date" value="'+dateVal+'" onchange="editMeta(\'date\',this.value,event)" style="flex:1">'+
+        '<input class="txt" type="time" value="'+timeVal+'" onchange="editMeta(\'time\',this.value,event)" style="width:110px">'+
+        '</div>'+
+        '<div class="row" style="margin-top:8px">'+
         '<input class="txt" type="number" inputmode="numeric" value="'+durMin+'" onchange="editMeta(\'durationMin\',this.value,event)" style="width:90px" title="Minuten">'+
-        '<span style="align-self:center;color:var(--dim);font-size:13px">min</span></div>'+
+        '<span style="align-self:center;color:var(--dim);font-size:13px">Minuten Dauer</span></div>'+
         '<div class="seclbl">Sätze</div>'+
         editDraft.sets.map((x,i)=>
           '<div class="row" style="margin-bottom:8px;align-items:center">'+
@@ -853,7 +962,7 @@ function renderHistory(){
     return '<div class="sess"><div class="head" onclick="toggleExpand(\''+s.id+'\')">'+
       '<div><div style="font-weight:700;font-size:15px">'+fmtDate(s.date)+
       (s.templateName?' <span style="color:var(--accent);font-size:12px">· '+esc(s.templateName)+'</span>':'')+'</div>'+
-      '<div style="color:var(--dim);font-size:13px">'+fmtDur(s.durationSec)+' · '+s.sets.length+' Sätze</div></div>'+
+      '<div style="color:var(--dim);font-size:13px">'+fmtTime(s.date)+' Uhr · '+fmtDur(s.durationSec)+' · '+s.sets.length+' Sätze</div></div>'+
       '<div class="vol num">'+fmtKg(vol)+' kg</div></div>'+detail+'</div>';
   }).join("");
 }
@@ -903,7 +1012,7 @@ function barChart(data, key, height){
   for(let i=0;i<n;i+=step) out+='<text x="'+x(i)+'" y="'+(H-6)+'" fill="#9BA1AD" font-size="10" text-anchor="middle">'+esc(data[i].name)+'</text>';
   for(let i=0;i<n;i++){
     const v=data[i][key]||0;
-    out+='<rect x="'+(x(i)-bw/2)+'" y="'+y(v)+'" width="'+bw+'" height="'+(y(0)-y(v))+'" rx="5" fill="#FF6B2C33" stroke="#FF6B2C"/>';
+    out+='<rect x="'+(x(i)-bw/2)+'" y="'+y(v)+'" width="'+bw+'" height="'+(y(0)-y(v))+'" rx="5" fill="'+(state.settings.accent||"#FF6B2C")+'33" stroke="'+(state.settings.accent||"#FF6B2C")+'"/>';
   }
   return out+'</svg>';
 }
@@ -923,6 +1032,47 @@ function machineProgress(entries){
   return fMax>0 ? (lMax-fMax)/fMax*100 : null;
 }
 function pickAnalysis(m){ analysisMachine = analysisMachine===m?null:m; renderStats(); }
+let calOffset = 0; // 0 = aktueller Monat, -1 = Vormonat, +1 = nächster Monat
+function calNav(d){ calOffset += d; renderStats(); }
+function renderCalendar(){
+  const base=new Date();
+  const view=new Date(base.getFullYear(), base.getMonth()+calOffset, 1);
+  const year=view.getFullYear(), month=view.getMonth();
+  // Tage mit Training im angezeigten Monat sammeln
+  const trained=new Set();
+  for(const s of state.sessions){
+    const d=new Date(s.date);
+    if(d.getFullYear()===year && d.getMonth()===month) trained.add(d.getDate());
+  }
+  const monthName=view.toLocaleDateString("de-DE",{month:"long",year:"numeric"});
+  const first=new Date(year,month,1);
+  let startOffset=(first.getDay()+6)%7; // Wochenstart Montag
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const isThisMonth = (calOffset===0);
+  const today=base.getDate();
+  const dows=["Mo","Di","Mi","Do","Fr","Sa","So"];
+  let cells="";
+  for(const d of dows) cells+='<div class="cdow">'+d+'</div>';
+  for(let i=0;i<startOffset;i++) cells+='<div></div>';
+  for(let day=1;day<=daysInMonth;day++){
+    const on=trained.has(day);
+    cells+='<div class="cday'+(isThisMonth&&day===today?" today":"")+'">'+
+      '<span class="dn">'+day+'</span>'+
+      '<span class="dot'+(on?" on":"")+'"></span></div>';
+  }
+  const count=trained.size;
+  return '<div class="cal">'+
+    '<div class="cnav">'+
+    '<button onclick="calNav(-1)">‹</button>'+
+    '<div class="cmonth">'+monthName+'</div>'+
+    '<button onclick="calNav(1)">›</button>'+
+    '</div>'+
+    '<div class="cgrid">'+cells+'</div>'+
+    '<div class="note" style="text-align:center;margin-top:10px">'+
+    (count?count+(count===1?' Trainingstag':' Trainingstage')+(isThisMonth?' diesen Monat 💪':' in diesem Monat'):'Kein Training in diesem Monat')+
+    (calOffset!==0?' · <span style="color:var(--accent);cursor:pointer" onclick="calNav('+(-calOffset)+')">heute</span>':'')+
+    '</div></div>';
+}
 function renderStats(){
   const el=document.getElementById("statsArea");
   if(!state.sessions.length){
@@ -936,7 +1086,34 @@ function renderStats(){
   const chartData=state.sessions.map(s=>({name:fmtShort(s.date), Volumen:sVol(s), Dauer:Math.round(s.durationSec/60)}));
   const mstats=machineStats();
 
+  // Wochen- und Monatsvolumen (aktuelle Kalenderwoche / aktueller Monat)
+  const now=new Date();
+  const monStart=new Date(now); // Montag dieser Woche, 00:00
+  monStart.setHours(0,0,0,0);
+  monStart.setDate(now.getDate()-((now.getDay()+6)%7));
+  let weekVol=0, monthVol=0, weekDays=new Set(), monthDays=new Set();
+  for(const s of state.sessions){
+    const d=new Date(s.date), v=sVol(s);
+    if(d>=monStart){ weekVol+=v; weekDays.add(d.toDateString()); }
+    if(d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth()){ monthVol+=v; monthDays.add(d.getDate()); }
+  }
+  // Wochen-Streak: zusammenhängende Wochen (ab dieser oder letzter) mit mind. 1 Training
+  const weekKey=dt=>{ const x=new Date(dt); x.setHours(0,0,0,0); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x.getTime(); };
+  const trainedWeeks=new Set(state.sessions.map(s=>weekKey(s.date)));
+  const WEEK=7*24*3600*1000;
+  let streak=0;
+  let cursor=weekKey(now);
+  // Wenn diese Woche noch kein Training, ab letzter Woche zählen (Streak noch intakt)
+  if(!trainedWeeks.has(cursor)) cursor-=WEEK;
+  while(trainedWeeks.has(cursor)){ streak++; cursor-=WEEK; }
+
   let html='<div class="cards">'+
+    '<div class="card"><div class="lbl">Diese Woche</div><div class="val num accent">'+fmtKg(weekVol)+' kg</div>'+
+      '<div class="sub2">'+weekDays.size+(weekDays.size===1?' Tag':' Tage')+'</div></div>'+
+    '<div class="card"><div class="lbl">Dieser Monat</div><div class="val num">'+fmtKg(monthVol)+' kg</div>'+
+      '<div class="sub2">'+monthDays.size+(monthDays.size===1?' Tag':' Tage')+'</div></div>'+
+    '<div class="card"><div class="lbl">Wochen-Streak</div><div class="val num accent">'+streak+' 🔥</div>'+
+      '<div class="sub2">'+(streak===0?'diese Woche noch nicht':streak===1?'Woche in Folge':'Wochen in Folge')+'</div></div>'+
     '<div class="card"><div class="lbl">Letztes vs. davor</div><div class="val num '+(trend!==null&&trend>=0?"accent":"")+'">'+
       (trend!==null?(trend>=0?"+":"")+trend.toFixed(1)+" %":"–")+'</div></div>'+
     '<div class="card"><div class="lbl">Ø Volumen</div><div class="val num">'+fmtKg(avg)+' kg</div></div>'+
@@ -945,8 +1122,10 @@ function renderStats(){
     '<div class="card"><div class="lbl">Gesamt bewegt</div><div class="val num accent">'+fmtKg(total)+' kg</div></div>'+
     '</div>';
 
+  html+='<div class="seclbl">Trainingskalender</div>'+renderCalendar();
+
   html+='<div class="seclbl">Volumen pro Training</div><div class="chartbox">'+
-    lineChart(chartData,[{key:"Volumen",color:"#FF6B2C"}])+'</div>';
+    lineChart(chartData,[{key:"Volumen",color:(state.settings.accent||"#FF6B2C")}])+'</div>';
 
   html+='<div class="seclbl">Steigerung pro Gerät (Max-Gewicht, erstes → letztes Training)</div><div class="chips">';
   for(const m of Object.keys(mstats)){
@@ -966,8 +1145,8 @@ function renderStats(){
     }
     const md=Object.values(byDay);
     html+='<div class="chartbox" style="margin-top:12px">'+
-      '<div class="legend"><span><i style="background:#F2F0EB"></i>Max kg</span><span><i style="background:#FF6B2C"></i>Volumen</span></div>'+
-      lineChart(md,[{key:"maxkg",color:"#F2F0EB"},{key:"vol",color:"#FF6B2C"}],170)+'</div>';
+      '<div class="legend"><span><i style="background:#F2F0EB"></i>Max kg</span><span><i style="background:'+(state.settings.accent||"#FF6B2C")+'"></i>Volumen</span></div>'+
+      lineChart(md,[{key:"maxkg",color:"#F2F0EB"},{key:"vol",color:(state.settings.accent||"#FF6B2C")}],170)+'</div>';
   }
 
   html+='<div class="seclbl">Trainingsdauer (Minuten)</div><div class="chartbox">'+
@@ -1022,6 +1201,12 @@ function tplToggleMachine(m){
   if(i>=0) tplSelMachines.splice(i,1); else tplSelMachines.push(m);
   renderTplMachineChips();
 }
+function tplMoveMachine(idx, dir){
+  const j=idx+dir;
+  if(j<0||j>=tplSelMachines.length) return;
+  const tmp=tplSelMachines[idx]; tplSelMachines[idx]=tplSelMachines[j]; tplSelMachines[j]=tmp;
+  renderTplMachineChips();
+}
 function renderTplMachineChips(){
   const el=document.getElementById("tplMachineChips");
   el.innerHTML=state.machines.map(m=>{
@@ -1029,6 +1214,18 @@ function renderTplMachineChips(){
     return '<div class="chip'+(idx>=0?" sel":"")+'" onclick="tplToggleMachine(\''+escJs(esc(m))+'\')">'+
       (idx>=0?(idx+1)+". ":"")+esc(m)+'</div>';
   }).join("");
+  // Geordnete Liste mit Pfeilen
+  const ord=document.getElementById("tplOrderList");
+  if(!ord) return;
+  if(!tplSelMachines.length){ ord.innerHTML=""; return; }
+  ord.innerHTML='<div class="seclbl" style="margin:14px 0 8px">Reihenfolge im Training</div>'+
+    tplSelMachines.map((m,i)=>
+      '<div class="ordrow"><span class="ordn">'+(i+1)+'.</span><span class="ordm">'+esc(m)+'</span>'+
+      '<span class="ordbtns">'+
+      '<button onclick="tplMoveMachine('+i+',-1)"'+(i===0?' disabled':'')+'>▲</button>'+
+      '<button onclick="tplMoveMachine('+i+',1)"'+(i===tplSelMachines.length-1?' disabled':'')+'>▼</button>'+
+      '</span></div>'
+    ).join("");
 }
 function saveTpl(){
   const name=document.getElementById("tplName").value.trim();
@@ -1041,18 +1238,24 @@ function saveTpl(){
     state.templates.push({id:"t_"+Date.now(), name, machines:tplSelMachines.slice()});
   }
   save(); closeTplEditor(); renderTplList(); renderIdle();
-  toast('Vorlage „'+name+'" gespeichert');
+  toast('Vorlage „'+name+'“ gespeichert');
 }
 
 // ================= Mehr: Einstellungen =================
 function renderSettings(){
-  document.getElementById("pauseSetInput").value = fmtDur(state.settings.pauseSec);
   document.getElementById("defKgInput").value = state.settings.defaultKg;
   document.getElementById("defRepsInput").value = state.settings.defaultReps;
+  const cur = state.settings.accent || "#FF6B2C";
+  document.getElementById("accentChips").innerHTML = ACCENT_COLORS.map(o=>
+    '<div class="chip" onclick="setAccent(\''+o.c+'\')" style="display:flex;align-items:center;gap:8px'+
+    (o.c===cur?';border-color:'+o.c+';border-width:2px':'')+'">'+
+    '<span style="width:16px;height:16px;border-radius:999px;background:'+o.c+';display:inline-block"></span>'+
+    o.name+(o.c===cur?' ✓':'')+'</div>'
+  ).join("");
 }
-function setPause(d){
-  state.settings.pauseSec = Math.max(15, Math.min(600, state.settings.pauseSec + d));
-  save(); renderSettings();
+function setAccent(c){
+  state.settings.accent = c;
+  save(); applyAccent(); renderSettings();
 }
 function setDef(key, d){
   const min = key==="defaultReps"?1:0;
@@ -1069,14 +1272,14 @@ function defChanged(){
 
 // ================= Mehr: Backup / Versionen =================
 function backupName(){
-  return "volumentracker-backup-"+new Date().toISOString().slice(0,10)+".json";
+  return "hantelheld-backup-"+new Date().toISOString().slice(0,10)+".json";
 }
 async function exportData(){
-  const payload=JSON.stringify({app:"volumentracker",version:VERSION,exportedAt:new Date().toISOString(),...state},null,2);
+  const payload=JSON.stringify({app:"hantelheld",version:VERSION,exportedAt:new Date().toISOString(),...state},null,2);
   const file=new File([payload], backupName(), {type:"application/json"});
   if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
     try {
-      await navigator.share({files:[file], title:"Volumentracker Backup"});
+      await navigator.share({files:[file], title:"Hantelheld Backup"});
       toast("Backup erstellt – in Dateien/iCloud sichern");
       return;
     } catch(e){ if(e.name==="AbortError") return; }
@@ -1087,6 +1290,31 @@ async function exportData(){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),5000);
   toast("Backup heruntergeladen");
+}
+// CSV: eine Zeile pro Satz – Datum, Reps, Volumen (Easy-Variante)
+async function exportCsv(){
+  if(!state.sessions.length){ toast("Noch keine Daten zum Exportieren"); return; }
+  const rows=[["Datum","Reps","Volumen_kg"]];
+  for(const s of state.sessions){
+    const dateStr=new Date(s.date).toLocaleDateString("de-DE");
+    for(const x of s.sets){
+      rows.push([dateStr, x.reps, (x.kg*x.reps)]);
+    }
+  }
+  // Semikolon-getrennt + Komma als Dezimaltrenner → öffnet sauber in deutschem Excel
+  const csv="\uFEFF"+rows.map(r=>r.map(c=>String(c).replace(".",",")).join(";")).join("\r\n");
+  const name="hantelheld-export-"+new Date().toISOString().slice(0,10)+".csv";
+  const file=new File([csv], name, {type:"text/csv"});
+  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+    try { await navigator.share({files:[file], title:"Hantelheld CSV"}); toast("CSV erstellt – in Dateien/iCloud sichern"); return; }
+    catch(e){ if(e.name==="AbortError") return; }
+  }
+  const url=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  const a=document.createElement("a");
+  a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  toast("CSV heruntergeladen");
 }
 function importData(ev){
   const file=ev.target.files && ev.target.files[0];
@@ -1136,6 +1364,7 @@ function renderVersions(){
 
 // ================= Start =================
 load();
+applyAccent();
 renderTraining();
 if (TEST_MODE) {
   const hint = document.createElement("div");
